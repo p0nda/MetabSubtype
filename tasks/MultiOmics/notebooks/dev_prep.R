@@ -67,9 +67,8 @@ if (!require(ggrepel)) {
 library(ggrepel)
 
 # clusterProfiler
-if (!require(clusterProfiler)) {
-  install.packages("clusterProfiler")
-}
+BiocManager::install("clusterProfiler")
+
 library(clusterProfiler)
 
 # KEGGREST
@@ -101,16 +100,24 @@ if (!require(survival)) {
 library(survival)
 
 # mixOmics
-if (!require(mixOmics)) {
-  install.packages("mixOmics")
-}
-library(mixOmics)
+BiocManager::install("mixOmics")
+
 
 # patchwork
 if (!require(patchwork)) {
   install.packages("patchwork")
 }
 library(patchwork)
+
+
+##### Notebooks #####
+install.packages("IRkernel")
+IRkernel::installsepc()
+
+install.packages("rmarkdown") # 写rmarkdown必需的包
+install.packages("knitr") # 导出文件必需的包
+install.packages("tinytex") # TeX的轻量级发行版，用于PDF文件的导出
+install.packages("rticles") # 配合中文导出PDF，有很多不同的文档模板可供使用
 
 # Bioconductor packages (replace with the specific ones you need)
 # Example:

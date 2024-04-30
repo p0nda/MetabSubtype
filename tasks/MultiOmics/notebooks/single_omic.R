@@ -3,7 +3,7 @@ library(stringr)
 library(dplyr)
 library(ComplexHeatmap)
 library(ggplot2)
-library(rJava)
+# library(rJava)
 library(xlsx)
 library(RColorBrewer)
 library(circlize)
@@ -23,16 +23,15 @@ library(patchwork)
 packageVersion("rlang")    #查看指定R包版本
 
 getwd()
-setwd("D:/repositories/liver-cancer-tasks/Tissue/notebooks/")
+setwd("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/notebooks/")
 source('utils.R')
 
-##### 20240105 Lipid #####
-
+##### Metab #####
 # filepath.metab='D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/lipid.csv'
-filepath.metab='D:/repositories/liver-cancer-tasks/Tissue/data/Using/metab.csv'
-filepath.sample='D:/repositories/liver-cancer-tasks/Tissue/data/Using/sample.csv'
+filepath.metab='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/Using/metab.csv'
+filepath.sample='/home/suh/workstation/MetabSubtype/tasks/Subtype/results/20240406/cluster_7e-2.csv'
 df.metab<-read.csv(filepath.metab, header= TRUE, check.names=F,row.names=1)
-df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
+df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F,row.names=1)
 df.metab[1:5,1:5]
 dim(df.metab)
 length(unique((df.metab[,1])))
@@ -42,10 +41,10 @@ df.metab[df.metab=='']=NA
 df.sample[df.sample=='']=NA
 df.sample[df.sample=='Neg']=NA
 # df.sample=df.sample[!is.na(df.sample['Sample Name']),c('Sample Name','主要分型','生存时间分组','MT2结构')]
-df.sample=df.sample[!is.na(df.sample['Sample Name']),]
-df.sample['Sample Name']
-row.names(df.sample)=df.sample[['Sample Name']]
+dim(df.sample)
 df.sample=df.sample[rownames(df.metab),]
+dim(df.sample)
+
 dim(df.metab)
 metab_num=ncol(df.metab)
 df.raw_metab=df.metab[,1:metab_num]
@@ -60,13 +59,12 @@ df.metab.log=log2(df.raw_metab)
 ##### Pathway #####
 # Prepare KEGG Data
 
-df.name_map=read.csv("D:/repositories/liver-cancer-tasks/Tissue/data/kegg_name_map.csv", header= TRUE, check.names=F)
-df.path.metab <- read.csv('D:/repositories/liver-cancer-tasks/Tissue/data/kegg_hsa_pathway_map.csv', header = T)
+df.name_map=read.csv("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_name_map.csv", header= TRUE, check.names=F)
+df.path.metab <- read.csv('/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_hsa_pathway_map.csv', header = T)
 df.path.metab=df.path.metab[1:3206,]
 df.path.metab=df.path.metab[!(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
 # df.path.metab[(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
 df.path.metab$pathway_name=str_replace(df.path.metab$pathway_name,' - Homo sapiens \\(human\\)','')
-
 dim(df.path.metab)
 dim(df.name_map)
 df.new=df.path.metab[df.path.metab$cpd_id %in% df.name_map$KEGG,]
@@ -201,7 +199,6 @@ for (pathway_name in pathway_names.too_many){
 }
 mat=as.matrix(df.pathway_fc[,'fc'])
 mat=as.matrix(df.pathway_fc[metabs.ms.tca,'fc'])
-mat[mat<1,]
 bk=c(0,1,3)
 col_fun<-colorRamp2(
     bk,
@@ -452,12 +449,12 @@ write.csv(df.plsda_cpd,'D:/repositories/liver-cancer-tasks/Tissue/results/202402
 ##### KEGG #####
 # Prepare KEGG Data
 
-df.name_map=read.csv("D:/repositories/liver-cancer-tasks/Tissue/data/kegg_name_map.csv", header= TRUE, check.names=F)
-df.path.metab <- read.csv('D:/repositories/liver-cancer-tasks/Tissue/data/kegg_hsa_pathway_map.csv', header = T)
-df.path.metab=df.path.metab[1:3206,]
-df.path.metab=df.path.metab[!(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
-# df.path.metab[(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
-df.path.metab$pathway_name=str_replace(df.path.metab$pathway_name,' - Homo sapiens \\(human\\)','')
+# df.name_map=read.csv("D:/repositories/liver-cancer-tasks/Tissue/data/kegg_name_map.csv", header= TRUE, check.names=F)
+# df.path.metab <- read.csv('D:/repositories/liver-cancer-tasks/Tissue/data/kegg_hsa_pathway_map.csv', header = T)
+# df.path.metab=df.path.metab[1:3206,]
+# df.path.metab=df.path.metab[!(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
+# # df.path.metab[(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
+# df.path.metab$pathway_name=str_replace(df.path.metab$pathway_name,' - Homo sapiens \\(human\\)','')
 
 dim(df.path.metab)
 dim(df.name_map)
@@ -467,9 +464,9 @@ df.new$query=df.name_map$compound[match(df.new$cpd_id, df.name_map$KEGG)]
 df.new[df.new=='']=NA
 head(df.new)
 # colnames(df.name_map)
-
+colnames(df.sample)
 # Relabel Codex
-class_label="MT2结构"
+class_label="nmf_2_clusters"
 df.use_sample=df.sample
 df.use_sample=df.use_sample[!is.na(df.use_sample[class_label]),]
 # df.use_sample=df.use_sample[df.use_sample[['CODEX主要亚型']] %in% c('A'),]
@@ -481,7 +478,8 @@ df.use=df.use[,2:ncol(df.use)]
 pvalue_cutoff=5e-2
 fc_up_cutoff=1.2
 fc_down_cutoff=1.2
-df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('high','low'))
+df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('1','2'))
+
 "
 df.test.results.mt2[(df.test.results$wilcox<=pvalue_cutoff),c('Metabolites','cpd_id','wilcox','FC')]
 df.test.results.mt2[(df.test.results$wilcox<=pvalue_cutoff)&(df.test.results$FC<=1),c('Metabolites','cpd_id','wilcox','FC')]
@@ -489,31 +487,8 @@ df.test.results.mt2[(df.test.results$wilcox<=pvalue_cutoff)&((df.test.results$FC
 "
 kegg_table.mt2=kegg_after_process(df.test.results.mt2,pvalue_cutoff,fc_up_cutoff,fc_down_cutoff)
 kegg_table.mt2
-pathway_names.mt2=kegg_table.mt2[['Description']]
-# Codex Group
 
-get_codex_kegg<-function(df.raw_metab,class_laebl,target_group){
-  df.use_sample=df.sample
-  df.use_sample=df.use_sample[!is.na(df.use_sample['codex_new']),]
-  df.use_sample['codex_new']
-  group_col='codex_new'
-  df.use_sample$tmp_codex=apply(df.use_sample,1,get_codex_label, group_col=group_col,target_group=target_group)
-  
-  # Build df.test of 4 Codex
-  df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by="row.names")
-  row.names(df.use)=df.use[[1]]
-  df.use=df.use[,2:ncol(df.use)]
-  type1=target_group
-  type2='others'
-  comporison_name=paste(type1,type2,sep='/')
-  df.test.tmp_survival=rbind(df.use[which(df.use[class_label] == type1),], 
-                             df.use[which(df.use[class_label] == type2),])
-  df.test.results.tmp_survival=kegg_before_process(df.test.tmp_survival,metab_num,class_label ,c(type1,type2))
-  kegg_table.tmp_survival=kegg_after_process(df.test.results.tmp_survival)
-  kegg_table.tmp_survival$comporison=comporison_name
-  kegg_table.tmp_survival=kegg_table.tmp_survival[order(kegg_table.tmp_survival$pvalue,decreasing = TRUE),]
-  return(kegg_table.tmp_survival)
-}
+pathway_names.mt2=kegg_table.mt2[['Description']]
 df.test.results.tmp_survival[df.test.results.tmp_survival['wilcox']<5e-2,]
 df.use_sample=df.sample
 df.use_sample=df.use_sample[!is.na(df.use_sample['CODEX主要亚型']),]
