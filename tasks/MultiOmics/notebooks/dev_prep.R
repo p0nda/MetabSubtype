@@ -68,12 +68,12 @@ library(ggrepel)
 
 # clusterProfiler
 BiocManager::install("clusterProfiler")
-
+BiocManager::install("clusterProfiler", dependencies = TRUE, INSTALL_opts = '--no-lock')
 library(clusterProfiler)
 
 # KEGGREST
-install.packages("BiocManager") 
-BiocManager::install("KEGGREST")
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
 
 # ConsensusClusterPlus
 if (!require(ConsensusClusterPlus)) {

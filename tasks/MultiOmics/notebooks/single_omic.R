@@ -72,7 +72,10 @@ df.new$query=NA
 df.new$query=df.name_map$compound[match(df.new$cpd_id, df.name_map$KEGG)]
 df.new[df.new=='']=NA
 head(df.new)
-
+df.new$pathway_id=as.character(df.new$pathway_id)
+df.new$cpd_id=as.character(df.new$cpd_id)
+df.new$query=as.character(df.new$query)
+str(df.new)
 ## Test 
 unique(df.new$pathway_name)
 pathway_name='Citrate cycle (TCA cycle) - Homo sapiens (human)'
@@ -479,6 +482,12 @@ pvalue_cutoff=5e-2
 fc_up_cutoff=1.2
 fc_down_cutoff=1.2
 df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('1','2'))
+## Test
+str(df.new)
+search_metabolite=colnames(df.use)[12]
+df.new$cpd_id
+df.new$cpd_id[grep(search_metabolite,df.new[['query']],ignore.case = TRUE)][1]
+##
 
 "
 df.test.results.mt2[(df.test.results$wilcox<=pvalue_cutoff),c('Metabolites','cpd_id','wilcox','FC')]
@@ -487,31 +496,6 @@ df.test.results.mt2[(df.test.results$wilcox<=pvalue_cutoff)&((df.test.results$FC
 "
 kegg_table.mt2=kegg_after_process(df.test.results.mt2,pvalue_cutoff,fc_up_cutoff,fc_down_cutoff)
 kegg_table.mt2
-
-pathway_names.mt2=kegg_table.mt2[['Description']]
-df.test.results.tmp_survival[df.test.results.tmp_survival['wilcox']<5e-2,]
-df.use_sample=df.sample
-df.use_sample=df.use_sample[!is.na(df.use_sample['CODEX主要亚型']),]
-df.use_sample['CODEX主要亚型']
-group_col='CODEX主要亚型'
-class_label='tmp_codex'
-target_group='A'
-kegg_table.codex.A=get_codex_kegg(df.raw_metab,class_label,target_group)
-target_group='N'
-kegg_table.codex.N=get_codex_kegg(df.raw_metab,class_label,target_group)
-target_group='Y'
-kegg_table.codex.Y=get_codex_kegg(df.raw_metab,class_label,target_group)
-target_group='P'
-kegg_table.codex.P=get_codex_kegg(df.raw_metab,class_label,target_group)
-
-kegg_table.codex=rbind(kegg_table.codex.A,kegg_table.codex.N,kegg_table.codex.Y,kegg_table.codex.P)
-kegg_table.codex=rbind(kegg_table.codex.A,kegg_table.codex.N,kegg_table.codex.P)
-# write.csv(kegg_table.tmp_survival,'D:/repositories/liver-cancer/tasks/Tissue/results/20231227/csvs/II_36_60.csv')
-kegg_table.codex=kegg_table.codex[order(kegg_table.codex$pvalue,decreasing = TRUE),]
-kegg_table.codex[,c('Description','pvalue','p.adjust','BgRatio','FoldEnrich','geneID','query')]
-# kegg_table_draw=kegg_table.codex[((kegg_table.codex[['pvalue']]<=5e-2)&(kegg_table.codex[['FoldEnrich']]>=7)),]
-kegg_table_draw=kegg_table.codex[((kegg_table.codex[['pvalue']]<=5e-2)),]
-
 # mt2 
 kegg_table_draw=kegg_table.mt2
 unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
@@ -520,7 +504,7 @@ names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
 
 pathway_names=unique(kegg_table_draw$Description)
 
-kegg_table_draw[kegg_table_draw['FDR']<=5e-2,c('Description','pvalue','query','comporison')]
+kegg_table_draw[kegg_table_draw['FDR']<=5e-2,c('Description','pvalue','query')]
 kegg_table_draw
 draw_comporison_kegg(kegg_table_draw ,'pvalue' )
 draw_comporison_kegg(kegg_table_draw ,'FDR' )
@@ -528,13 +512,14 @@ draw_comporison_kegg(kegg_table_draw ,'FDR' )
 # Figure using FDR as X
 kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
 kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-10):nrow(kegg_table_draw),]
-kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-9):nrow(kegg_table_draw),]
-dirpath='D:/repositories/liver-cancer-tasks/Tissue/results/20240202/kegg/'
+dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
+write.csv(kegg_table.mt2,paste0(dirpath,'metab_pathway.csv',collapse = '/'))
+
 kegg_table_draw$FDR
 p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
   geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
   scale_y_discrete(limits = kegg_table_draw[['Description']])+
-  scale_size(range = c(3, 15), breaks = c(seq(0,25,5))) +
+  scale_size(range = c(3, 15), breaks = c(seq(0,10,2))) +
   # scale_color_gradient(low="blue",high = "red")+
   scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(1,3,0.5)))+
   #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
@@ -548,7 +533,7 @@ p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
         legend.title = element_text(size = 10, face = "plain", colour = "black"), 
         legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
 
-pdf(paste(dirpath,'mt2_fdr_bubble.pdf',sep = ''),12,7)
+pdf(paste(dirpath,'metab.pdf',sep = ''),12,7)
 print(p)
 dev.off()
 ##### CPD Line #####
