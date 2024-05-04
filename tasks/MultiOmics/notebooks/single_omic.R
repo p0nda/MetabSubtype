@@ -4,7 +4,7 @@ library(dplyr)
 library(ComplexHeatmap)
 library(ggplot2)
 # library(rJava)
-library(xlsx)
+# library(xlsx)
 library(RColorBrewer)
 library(circlize)
 library(umap)
@@ -21,11 +21,10 @@ library(mixOmics)
 library(patchwork)
 
 packageVersion("rlang")    #查看指定R包版本
-
+R.version
 getwd()
 setwd("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/notebooks/")
 source('utils.R')
-
 ##### Metab #####
 # filepath.metab='D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/lipid.csv'
 filepath.metab='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/Using/metab.csv'
@@ -311,38 +310,13 @@ table(df.use_sample$tmp_survival)
 
 # Relabel Codex
 
-class_label='codex_new'
+class_label='nmf_2_clusters'
 df.use_sample=df.sample
-df.use_sample=df.use_sample[!is.na(df.use_sample['codex_new']),]
-df.use_sample['codex_new']
-df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by='row.names')
+df.use_sample=df.use_sample[!is.na(df.use_sample[class_label]),]
+df.use=merge(df.raw_metab.scaled,df.use_sample[,class_label,drop=FALSE],by='row.names')
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
-# Target vs Others
-df.use_sample=df.sample
-group_col='codex_new'
-target_group='Y'
-df.use_sample=df.use_sample[!is.na(df.use_sample[group_col]),]
-df.use_sample$tmp_codex=apply(df.use_sample,1,get_codex_label, group_col=group_col,target_group=target_group)
-table(df.use_sample[group_col])
-class_label='tmp_codex'
-df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by='row.names')
-row.names(df.use)=df.use[[1]]
-df.use=df.use[,2:ncol(df.use)]
-
-# MT2
-class_label='MT2结构'
-df.use_sample=df.sample
-df.use_sample=df.use_sample[df.use_sample[['CODEX主要亚型']] %in% c('A'),]
-df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by='row.names')
-row.names(df.use)=df.use[[1]]
-df.use=df.use[,2:ncol(df.use)]
-
-!is.na(df.use[[class_label]])
-df.use[[class_label]]
-# class_label='batch'
-df.use=df.use[df.use[[class_label]]!='0',]
 df.use=df.use[df.use[[class_label]]!='Neg',]
 pvalue_cutoff=5e-2
 use_row_ha=FALSE

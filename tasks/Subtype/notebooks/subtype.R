@@ -21,7 +21,7 @@ library(survival)
 
 
 getwd()
-setwd("D:/repositories/liver-cancer-tasks/Tissue/notebooks/")
+setwd("~/workstation/MetabSubtype/tasks/Subtype/notebooks/")
 source('utils.R')
 
 set.seed(6)
@@ -31,8 +31,8 @@ set.seed(6)
 LABEL_NUM=0
 # filepath.metab='D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/lipid.csv'
 # filepath.metab='D:/repositories/liver-cancer-tasks/Tissue/data/Using/metab.csv'
-filepath.metab='D:/repositories/liver-cancer-tasks/Tissue/data/Using/lipid.csv'
-filepath.sample='D:/repositories/liver-cancer-tasks/Tissue/data/Using/sample.csv'
+filepath.metab='~/workstation/MetabSubtype/tasks/Subtype/data/Using/metab.csv'
+filepath.sample='~/workstation/MetabSubtype/tasks/Subtype/data/Using/sample.csv'
 df.metab<-read.csv(filepath.metab, header= TRUE, check.names=F,row.names=1)
 df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
 df.metab[1:5,1:5]
@@ -95,9 +95,9 @@ dim(df.cluster_result)
 dim(df.use)
 
 # Use Saved Matrix
-filepath.cluster='D:/repositories/liver-cancer-tasks/Tissue/results/20240406/cluster_7e-2.csv'
+filepath.cluster='~/workstation/MetabSubtype/tasks/Subtype/results/20240406/cluster_7e-2.csv'
 df.cluster_result<-read.csv(filepath.cluster, header= TRUE, check.names=F,row.names=1)
-df.cluster_result.metab.correction=df.cluster_result
+df.cluster_result.correction=df.cluster_result
 .Random.seed[1:5]
 df.sample
 # Save Sample Data
@@ -258,7 +258,7 @@ myplots[[1]]+myplots[[2]]+myplots[[3]]+myplots[[4]]
 
 ##### Survival #####
 df.sample
-df.use.os=merge(df.cluster_result.lipid.correction,df.sample[,c('os','oss')],by='row.names')
+df.use.os=merge(df.cluster_result,df.sample[,c('os','oss')],by='row.names')
 df.use.os=df.use.os[order(df.use.os$os),,drop=FALSE]
 # df.use.os=df.use.os[1:(nrow(df.use.os)-1),]
 dim(df.use.os)

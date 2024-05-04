@@ -4,6 +4,9 @@
 if (!require(stringr)) {
   install.packages("stringr")
 }
+install.packages("stringi", dependencies=TRUE, INSTALL_opts = c('--no-lock'))
+install.packages("stringr", dependencies=TRUE, INSTALL_opts = c('--no-lock'))
+
 library(stringr)
 
 # dplyr
@@ -11,10 +14,11 @@ if (!require(dplyr)) {
   install.packages("dplyr")
 }
 library(dplyr)
-
+if (!require("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
 # ComplexHeatmap
 if (!require(ComplexHeatmap)) {
-  install.packages("ComplexHeatmap")
+  BiocManager::install("ComplexHeatmap")
 }
 library(ComplexHeatmap)
 
@@ -24,6 +28,16 @@ if (!require(ggplot2)) {
 }
 library(ggplot2)
 
+
+install.packages("survminer")
+install.packages("survival")
+install.packages("umap")
+install.packages("tsne")
+
+
+if(!require(devtools)) install.packages("devtools")
+devtools::install_github("kassambara/survminer", build_vignettes = FALSE)
+
 # rJava
 if (!require(rJava)) {
   install.packages("rJava")
@@ -32,7 +46,7 @@ library(rJava)
 
 # xlsx
 if (!require(xlsx)) {
-  install.packages("xlsx")
+  install.packages("xlsx",dependencies = TRUE)
 }
 library(xlsx)
 
@@ -68,6 +82,9 @@ library(ggrepel)
 
 # clusterProfiler
 BiocManager::install("clusterProfiler")
+BiocManager::install("KEGGREST")
+BiocManager::install("survminer",dependencies = TRUE, INSTALL_opts = '--no-lock')
+library(KEGGREST)
 BiocManager::install("clusterProfiler", dependencies = TRUE, INSTALL_opts = '--no-lock')
 library(clusterProfiler)
 
