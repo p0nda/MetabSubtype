@@ -1,6 +1,18 @@
-# Prepare Data
-ddd
-```{R}
-ddd=1
-# 
+---
+title: "Hello R Markdown"
+author: "Su Hang"
+date: "2024-05-07"
+output: html_document
+---
 
+# Prepare Data
+
+## Metab
+
+ddd
+
+```{r}
+ddd=1
+```
+
+The slope of the regression is `r ddd`.

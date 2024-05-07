@@ -1,0 +1,72 @@
+```{r}
+library(stringr)
+# library(eoffice)
+library(dplyr)
+library(ComplexHeatmap)
+library(ggplot2)
+# library(rJava)
+# library(xlsx)
+library(RColorBrewer)
+library(circlize)
+library(umap)
+library(Rtsne)
+library(ggrepel)
+library(ggplot2)
+library(clusterProfiler)
+library(KEGGREST)
+# library(ConsensusClusterPlus)
+library(viridis)
+library(survminer)
+library(survival)
+library(mixOmics)
+library(patchwork)
+```
+
+# Prepare Data
+
+## Read
+
+```{r}
+
+packageVersion("rlang")    #查看指定R包版本
+R.version
+getwd()
+setwd("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/notebooks/")
+source('utils.R')
+##### Metab #####
+# filepath.rna_counts='D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/lipid.csv'
+filepath.rna_counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/rna/counts.csv'
+filepath.sample='/home/suh/workstation/MetabSubtype/tasks/Subtype/results/20240406/cluster_7e-2.csv'
+df.rna_counts<-read.csv(filepath.rna_counts, header= TRUE, check.names=F,row.names=1)
+df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F,row.names=1)
+df.rna_counts[1:5,1:5]
+dim(df.rna_counts)
+length(unique((df.rna_counts[,1])))
+unique(df.rna_counts[,1])
+df.rna_counts[,1]
+df.rna_counts[df.rna_counts=='']=NA
+df.sample[df.sample=='']=NA
+df.sample[df.sample=='Neg']=NA
+# df.sample=df.sample[!is.na(df.sample['Sample Name']),c('Sample Name','主要分型','生存时间分组','MT2结构')]
+dim(df.sample)
+df.sample=df.sample[rownames(df.rna_counts),]
+df.sample=na.omit(df.sample)
+dim(df.sample)
+
+metab_num=ncol(df.rna_counts)
+df.raw_counts=df.rna_counts[,1:metab_num]
+df.rna_counts.log=log2(df.raw_counts)
+dim(df.rna_counts)
+
+```
+
+## Filter
+
+```{r}
+keep_cols=colnames(df.raw_counts)[colSums(df.raw_counts>20)>=110]
+length(keep_cols)
+```
+
+```{r}
+
+```

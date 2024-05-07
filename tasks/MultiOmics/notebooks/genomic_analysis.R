@@ -26,94 +26,35 @@ getwd()
 setwd("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/notebooks/")
 source('utils.R')
 ##### Metab #####
-# filepath.metab='D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/lipid.csv'
-filepath.metab='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/Using/metab.csv'
+# filepath.rna_counts='D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/lipid.csv'
+filepath.rna_counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/rna/counts.csv'
 filepath.sample='/home/suh/workstation/MetabSubtype/tasks/Subtype/results/20240406/cluster_7e-2.csv'
-df.metab<-read.csv(filepath.metab, header= TRUE, check.names=F,row.names=1)
+df.rna_counts<-read.csv(filepath.rna_counts, header= TRUE, check.names=F,row.names=1)
 df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F,row.names=1)
-df.metab[1:5,1:5]
-dim(df.metab)
-length(unique((df.metab[,1])))
-unique(df.metab[,1])
-df.metab[,1]
-df.metab[df.metab=='']=NA
+df.rna_counts[1:5,1:5]
+dim(df.rna_counts)
+length(unique((df.rna_counts[,1])))
+unique(df.rna_counts[,1])
+df.rna_counts[,1]
+df.rna_counts[df.rna_counts=='']=NA
 df.sample[df.sample=='']=NA
 df.sample[df.sample=='Neg']=NA
 # df.sample=df.sample[!is.na(df.sample['Sample Name']),c('Sample Name','主要分型','生存时间分组','MT2结构')]
 dim(df.sample)
-df.sample=df.sample[rownames(df.metab),]
+df.sample=df.sample[rownames(df.rna_counts),]
+df.sample=na.omit(df.sample)
 dim(df.sample)
-
-dim(df.metab)
-metab_num=ncol(df.metab)
-df.raw_metab=df.metab[,1:metab_num]
-df.metab.log=log2(df.raw_metab)
-
-# Odd Chain
-# dim(df.raw_metab)
-# df.raw_metab=drop_odd_chain_cols(df.raw_metab)
-# dim(df.raw_metab)
-# metab_num=dim(df.raw_metab)[2]
+##### Data Cleaning #####
+smallestGroupSize=min(nrow(df.sample[df.sample['nmf_2_clusters']==1,]),nrow(df.sample[df.sample['nmf_2_clusters']==2,]))
+keep_cols=colnames(df.raw_counts)[colSums(df.raw_counts>20)>=smallestGroupSize]
+df.rna_counts=df.rna_counts[,keep_cols]
+metab_num=ncol(df.rna_counts)
+df.raw_counts=df.rna_counts[,keep_cols]
+df.rna_counts.log=log2(df.raw_counts)
+dim(df.rna_counts)
 
 ##### Pathway #####
-# Prepare KEGG Data
-
-df.name_map=read.csv("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_name_map.csv", header= TRUE, check.names=F)
-df.path.metab <- read.csv('/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_hsa_pathway_map.csv', header = T)
-df.path.metab=df.path.metab[1:3206,]
-df.path.metab=df.path.metab[!(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
-# df.path.metab[(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
-df.path.metab$pathway_name=str_replace(df.path.metab$pathway_name,' - Homo sapiens \\(human\\)','')
-dim(df.path.metab)
-dim(df.name_map)
-df.new=df.path.metab[df.path.metab$cpd_id %in% df.name_map$KEGG,]
-df.new$query=NA
-df.new$query=df.name_map$compound[match(df.new$cpd_id, df.name_map$KEGG)]
-df.new[df.new=='']=NA
-head(df.new)
-df.new$pathway_id=as.character(df.new$pathway_id)
-df.new$cpd_id=as.character(df.new$cpd_id)
-df.new$query=as.character(df.new$query)
-str(df.new)
-## Test 
-unique(df.new$pathway_name)
-pathway_name='Citrate cycle (TCA cycle) - Homo sapiens (human)'
-metabs.kegg.tca=df.new[df.new$pathway_name==pathway_name,'query']
-metabs.kegg.tca
-metabs.ms.tca=get_ms_metabs(metabs.kegg.tca)
-metabs.ms.tca
-##
-
 # MT2 pathway 
-class_label="MT2结构"
-df.use_sample=df.sample
-df.use_sample=df.use_sample[!is.na(df.use_sample[class_label]),]
-type1='high'
-type2='low'
-df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by="row.names")
-row.names(df.use)=df.use[[1]]
-df.use=df.use[,2:ncol(df.use)]
-pathway_matrix=df.use %>% group_by(!!sym(class_label)) %>% summarise_all(mean)
-dim(pathway_matrix)
-colnames(pathway_matrix)
-# Row Name Specified
-df.pathway_fc=as.data.frame(pathway_matrix)
-row.names(df.pathway_fc)=df.pathway_fc[[1]]
-df.pathway_fc=df.pathway_fc[,2:ncol(df.pathway_fc)]
-df.pathway_fc['fc',]=df.pathway_fc['low',]/df.pathway_fc['high',]
-df.pathway_fc=t(df.pathway_fc)
-df.pathway_fc=as.data.frame(df.pathway_fc)
-df.pathway_fc
-colnames(df.pathway_fc)
-df.pathway_fc[['fc']]
-df.pathway_fc['log2fc']=sapply(df.pathway_fc[['fc']],log2)
-pvalue.mt2_pathway=pvalue_by_wilcox(df.use,metab_num,class_label)
-pvalue.mt2_pathway
-match(pvalue.mt2_pathway[['Metabolites']],rownames(df.pathway_fc))
-df.pathway_fc$pvalue=pvalue.mt2_pathway[match(pvalue.mt2_pathway[['Metabolites']],rownames(df.pathway_fc)),'pvalue']
-df.pathway_fc
-# write.csv(df.pathway_fc,'D:/repositories/liver-cancer-tasks/Tissue/results/20240202/pathway_fc_pvalue.csv')
-
 
 dirpath="D:/repositories/liver-cancer-tasks/Tissue/results/20240202/heatmap/MT2_pathway/"
 pathway_name="Citrate cycle (TCA cycle)"
@@ -223,7 +164,7 @@ ComplexHeatmap::pheatmap(mat,
 df.confused=cbind(df.use[,confused_metabs],df.use[,class_label,drop=FALSE])
 draw_single_heatmap(df.confused,length(confused_metabs),class_label,1,FALSE )
 
-ComplexHeatmap::pheatmap(log2(df.raw_metab[,confused_metabs]),
+ComplexHeatmap::pheatmap(log2(df.raw_counts[,confused_metabs]),
                             # col = col_fun,
                             name = pathway_name,
                             top_annotation=HeatmapAnnotation(df=df.sample[,class_label],col = color_list,
@@ -249,15 +190,15 @@ dirpath="D:/repositories/liver-cancer-tasks/Tissue/results/20240202/heatmap/"
 # setwd(dirpath)
 class_label='CODEX主要亚型'
 df.use_sample=df.sample
-df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by="row.names")
+df.use=merge(df.raw_counts,df.use_sample[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
-df.metab.mean=df.use %>% group_by(!!sym(class_label)) %>% summarise_all(mean)
-df.metab.mean=as.data.frame(df.metab.mean)
-df.metab.mean=df.metab.mean[!is.na(df.metab.mean[,class_label]),]
-rownames(df.metab.mean)=df.metab.mean[[class_label]]
-df.metab.mean=cbind(df.metab.mean[,2:(1+metab_num)],df.metab.mean[,1,drop=FALSE])
-dim(df.metab.mean)
+df.rna_counts.mean=df.use %>% group_by(!!sym(class_label)) %>% summarise_all(mean)
+df.rna_counts.mean=as.data.frame(df.rna_counts.mean)
+df.rna_counts.mean=df.rna_counts.mean[!is.na(df.rna_counts.mean[,class_label]),]
+rownames(df.rna_counts.mean)=df.rna_counts.mean[[class_label]]
+df.rna_counts.mean=cbind(df.rna_counts.mean[,2:(1+metab_num)],df.rna_counts.mean[,1,drop=FALSE])
+dim(df.rna_counts.mean)
 metab_num
 pvalue_cutoff=1
 use_row_ha=FALSE
@@ -268,7 +209,7 @@ for (pathway_name in pathway_names){
   pathway_metabs=get_ms_metabs(pathway_metabs)
   pathway_metabs=pathway_metabs[pathway_metabs!='NA']
   using_metabs=c(pathway_metabs,class_label)
-  p=draw_single_heatmap(df.metab.mean[,using_metabs],length(pathway_metabs),class_label,pvalue_cutoff,use_row_ha )
+  p=draw_single_heatmap(df.rna_counts.mean[,using_metabs],length(pathway_metabs),class_label,pvalue_cutoff,use_row_ha )
   print(p)
   pathway_name=str_replace_all(pathway_name,'/','_')
   pathway_name=str_replace_all(pathway_name,',','_')
@@ -285,35 +226,17 @@ for (pathway_name in pathway_names){
   
 }
 
-draw_single_heatmap(df.metab.mean,metab_num,class_label,pvalue_cutoff,use_row_ha )
- 
+draw_single_heatmap(df.rna_counts.mean,metab_num,class_label,pvalue_cutoff,use_row_ha)
 Sys.sleep(3)
 
 ##### Heatmap #####
-
-# Generate using DF
-# Relabel Survival
-
-"
-# Select Batch
-df.use_sample=df.sample
-# df.use_sample=df.use_sample[df.use_sample[['CODEX主要亚型']] %in% c('A'),]
-df.use_sample=df.use_sample[df.use_sample[['TMN']] %in% c('II'),]
-df.use_sample
-low_cutoff=36
-high_cutoff=60
-df.use_sample$tmp_survival=apply(df.use_sample[,c('os','oss')],1,get_survival_label, low_cutoff=low_cutoff,high_cutoff=high_cutoff)
-df.use_sample[(df.use_sample['oss']==1)&(df.use_sample['os']<=12),]
-table(df.use_sample$tmp_survival)
-"
-# merge
 
 # Relabel Codex
 
 class_label='nmf_2_clusters'
 df.use_sample=df.sample
 df.use_sample=df.use_sample[!is.na(df.use_sample[class_label]),]
-df.use=merge(df.raw_metab.scaled,df.use_sample[,class_label,drop=FALSE],by='row.names')
+df.use=merge(df.raw_counts,df.use_sample[,class_label,drop=FALSE],by='row.names')
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
@@ -323,6 +246,8 @@ use_row_ha=FALSE
 col_split=TRUE
 draw_single_heatmap(df.use,metab_num,class_label,pvalue_cutoff,use_row_ha )
 table(df.use_sample[class_label])
+
+dim(df.test.results[df.test.results$wilcox_BH<5e-2,])
 
 #####  Volcano #####
 
@@ -357,7 +282,7 @@ draw_volcano(volcano.test.results,pvalue_cutoff,fc_up_cutoff)
 
 ##### PCA ######
 
-df.use=merge(df.raw_metab,df.sample[,c('CODEX主要亚型','MT2结构','codex_new'),drop=FALSE],by='row.names')
+df.use=merge(df.raw_counts,df.sample[,c('CODEX主要亚型','MT2结构','codex_new'),drop=FALSE],by='row.names')
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 group_col='CODEX主要亚型'
@@ -421,85 +346,118 @@ df_plsda
 df_plsda$prop_expl_var$X
 
 df.plsda_cpd=merge(df_plsda$variates,df.sample[,c('CODEX主要亚型'),drop=FALSE],by='row.names')
-write.csv(df.plsda_cpd,'D:/repositories/liver-cancer-tasks/Tissue/results/20240202/pca/metab_plsda_compounds.csv')
+
+
 
 ##### KEGG #####
-# Prepare KEGG Data
 
-# df.name_map=read.csv("D:/repositories/liver-cancer-tasks/Tissue/data/kegg_name_map.csv", header= TRUE, check.names=F)
-# df.path.metab <- read.csv('D:/repositories/liver-cancer-tasks/Tissue/data/kegg_hsa_pathway_map.csv', header = T)
-# df.path.metab=df.path.metab[1:3206,]
-# df.path.metab=df.path.metab[!(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
-# # df.path.metab[(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
-# df.path.metab$pathway_name=str_replace(df.path.metab$pathway_name,' - Homo sapiens \\(human\\)','')
-
-dim(df.path.metab)
-dim(df.name_map)
-df.new=df.path.metab[df.path.metab$cpd_id %in% df.name_map$KEGG,]
-df.new$query=NA
-df.new$query=df.name_map$compound[match(df.new$cpd_id, df.name_map$KEGG)]
-df.new[df.new=='']=NA
-head(df.new)
-# colnames(df.name_map)
-colnames(df.sample)
-# Relabel Codex
+# Build Dataset
 class_label="nmf_2_clusters"
 df.use_sample=df.sample
 df.use_sample=df.use_sample[!is.na(df.use_sample[class_label]),]
-# df.use_sample=df.use_sample[df.use_sample[['CODEX主要亚型']] %in% c('A'),]
-# type1='high'
-# type2=setdiff(unique(df.use_sample[[class_label]]),type1)
-df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by="row.names")
+
+df.use=merge(df.raw_counts,df.use_sample[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
+
+# df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('1','2'))
+
+# Before KEGG Analysis
+df.test=df.use
+types=c('1','2')
+df.test.results=data.frame(geneid = (colnames(df.test)[1:metab_num]))
+df.test.results$wilcox=apply(df.test[, 1:metab_num], 2,
+                             function(x) unlist(wilcox.test(as.numeric(x) ~ df.test[[class_label]], data = df.test, exact = FALSE)[3]))
+df.test.results$wilcox_BH=p.adjust(df.test.results$wilcox,method="BH")
+df.test.results$FC <- apply(df.test[,1:metab_num], 2, 
+                            function(x) 
+                              mean(as.numeric(x[which(df.test[class_label] == types[1])]))/
+                              mean(as.numeric(x[which(df.test[class_label] == types[2])])))
+df.test.results$log2FC<- log2(df.test.results$FC)
+dim(df.test.results)
+
+# Read Stat Results and Do KEGG
+filepath.stat.counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/results/20240507/counts_stat.csv'
+df.test.results<-read.csv(filepath.stat.counts, header= TRUE, check.names=F,row.names=1)
+colnames(df.test.results)[which(names(df.test.results) =="geneid")] <- "cpd_id"
+
+
 pvalue_cutoff=5e-2
 fc_up_cutoff=1.2
 fc_down_cutoff=1.2
-df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('1','2'))
-## Test
-str(df.new)
-search_metabolite=colnames(df.use)[12]
-df.new$cpd_id
-df.new$cpd_id[grep(search_metabolite,df.new[['query']],ignore.case = TRUE)][1]
-##
+library('org.Hs.eg.db')
 
-"
-df.test.results.mt2[(df.test.results$wilcox<=pvalue_cutoff),c('Metabolites','cpd_id','wilcox','FC')]
-df.test.results.mt2[(df.test.results$wilcox<=pvalue_cutoff)&(df.test.results$FC<=1),c('Metabolites','cpd_id','wilcox','FC')]
-df.test.results.mt2[(df.test.results$wilcox<=pvalue_cutoff)&((df.test.results$FC>=fc_up_cutoff)|(df.test.results$FC<=fc_down_cutoff)),c('Metabolites','cpd_id','wilcox','FC')]
-"
-kegg_table.mt2=kegg_after_process(df.test.results.mt2,pvalue_cutoff,fc_up_cutoff,fc_down_cutoff)
-kegg_table.mt2
-# mt2 
-kegg_table_draw=kegg_table.mt2
+df.test.results$is_use=(df.test.results$wilcox<=pvalue_cutoff)&((df.test.results$FC>=fc_up_cutoff)|(df.test.results$FC<=fc_down_cutoff))
+df.test.results.up=df.test.results[df.test.results$log2FC>0,]
+df.test.results.down=df.test.results[df.test.results$log2FC<0,]
+
+# Choose Up or Down
+used_ens_ids=df.test.results.up$cpd_id[df.test.results.up$is_use]
+used_ens_ids=df.test.results.down$cpd_id[df.test.results.down$is_use]
+#
+
+print(paste0('used metab number is ',length(used_ens_ids)))
+columns(org.Hs.eg.db)
+
+used_entrz_ids=mapIds(org.Hs.eg.db,keys=used_ens_ids,keytype="ENSEMBL",column="ENTREZID")
+kegg_result=enrichKEGG(
+  used_entrz_ids,
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  use_internal_data = FALSE
+)
+kegg_result
+kegg_table <- na.omit(as.data.frame(kegg_result))
+kegg_table$Description
+kegg_table$Description=str_replace(kegg_table$Description,' - Homo sapiens \\(human\\)','')
+# write.table(kegg_table,'D:/repositories/liver-cancer/tasks/Tissue/results/tmp_R/kegg_table.csv',sep=',',row.names = FALSE)
+kegg_table$Description
+
+kegg_table <- kegg_table[kegg_table$Count > 2,]
+
+kegg_table$metabs_mean <- apply(kegg_table, 1, path_avelog2FC,df.test.results=df.test.results)
+# calculate fold enrichment
+kegg_table[1:5,3:8]
+dim(kegg_table)
+kegg_table$FoldEnrich <- apply(kegg_table, 1, 
+                               function(x) as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[1])/
+                                 as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+
+# Generate Draw Table
+kegg_table_draw=kegg_table
 unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
 kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
 names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
 
 pathway_names=unique(kegg_table_draw$Description)
 
-kegg_table_draw[kegg_table_draw['FDR']<=5e-2,c('Description','pvalue','query')]
 kegg_table_draw
-draw_comporison_kegg(kegg_table_draw ,'pvalue' )
-draw_comporison_kegg(kegg_table_draw ,'FDR' )
 
 # Figure using FDR as X
 kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
-kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-10):nrow(kegg_table_draw),]
+kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-15):nrow(kegg_table_draw),]
 dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
-write.csv(kegg_table.mt2,paste0(dirpath,'metab_pathway.csv',collapse = '/'))
+# write.csv(kegg_table.mt2,paste0(dirpath,'counts_pathway_up.csv',collapse = '/'))
 
 kegg_table_draw$FDR
+kegg_table_draw$FoldEnrich
 p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
   geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
   scale_y_discrete(limits = kegg_table_draw[['Description']])+
-  scale_size(range = c(3, 15), breaks = c(seq(0,10,2))) +
+  scale_size(range = c(3, 15), breaks = c(seq(1,3,0.2))) +
   # scale_color_gradient(low="blue",high = "red")+
   scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(1,3,0.5)))+
   #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
   theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
   # coord_fixed(ratio = 0.4) +
-  labs(x = "-Log10(FDR)", y = "", title = "", 
+  labs(x = "-Log10(FDR)", y = "", title = "RNA Upregulate", 
        fill = "-Log10(FDR)", size = "Enrich Ratio") +
   theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
         axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
@@ -507,34 +465,34 @@ p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
         legend.title = element_text(size = 10, face = "plain", colour = "black"), 
         legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
 
-pdf(paste(dirpath,'metab.pdf',sep = ''),12,7)
+# pdf(paste(dirpath,'rna_counts_up.pdf',sep = ''),12,7)
 print(p)
 dev.off()
+
+
+
+
 ##### CPD Line #####
-'
 # Prepare Metab
-class_label="CODEX主要亚型"
-typeof(df.raw_metab)
-df.metab.log=log2(df.raw_metab)
-df.metab.log
-# Norm
-metab_mean=apply(df.metab.log,1,mean)
-metab_mean
-length(metab_mean)
-metab_std=apply(df.metab.log,1,sd)
-df.scaled.mannul=(df.metab.log-metab_mean)/metab_std
-# Check
-apply(df.scaled.fun,1,mean)
-apply(df.scaled.mannul,1,mean)
-# 
-df.metab.scaled=df.scaled.mannul
-'
-idx <- which(df.raw_metab <= 0, arr.ind = TRUE)
-print(df.raw_metab[idx])
+
+# # Norm
+# metab_mean=apply(df.rna_counts.log,1,mean)
+# metab_mean
+# length(metab_mean)
+# metab_std=apply(df.rna_counts.log,1,sd)
+# df.scaled.mannul=(df.rna_counts.log-metab_mean)/metab_std
+# # Check
+# apply(df.scaled.fun,1,mean)
+# apply(df.scaled.mannul,1,mean)
+# # 
+# df.rna_counts.scaled=df.scaled.mannul
+
+idx <- which(df.raw_counts <= 0, arr.ind = TRUE)
+print(df.raw_counts[idx])
 # Generate df.use
 class_label='CODEX主要亚型'
 df.use_sample=df.sample
-df.use=merge(df.metab.scaled,df.use_sample[,class_label,drop=FALSE],by="row.names")
+df.use=merge(df.rna_counts,df.use_sample[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 df.use=df.use[!is.na(df.use[class_label]),]
@@ -565,21 +523,21 @@ draw_kegg_cpd<-function(df.use,df.cpd_kegg,pathway_name){
   color_palette <- brewer.pal(n = 9, name = "Set1")
   print(pathway_name)
   queries=unlist(strsplit(df.cpd_kegg[which(df.cpd_kegg[['Description']]==pathway_name),'query'],'/'))
-  queries=unname(unlist(sapply(queries,function(search_metabolite){(colnames(df.raw_metab)[grep(search_metabolite,colnames(df.raw_metab),ignore.case = TRUE)][1])})))
+  queries=unname(unlist(sapply(queries,function(search_metabolite){(colnames(df.raw_counts)[grep(search_metabolite,colnames(df.raw_counts),ignore.case = TRUE)][1])})))
   print(queries)
   # Try to norm in loop
   
-  df.metab.scaled=df.metab.log
-  df.metab.scaled=df.metab.scaled[,queries]
-  metab_mean=apply(df.metab.log,1,mean)
+  df.rna_counts.scaled=df.rna_counts.log
+  df.rna_counts.scaled=df.rna_counts.scaled[,queries]
+  metab_mean=apply(df.rna_counts.log,1,mean)
   metab_mean
   length(metab_mean)
-  metab_std=apply(df.metab.log,1,sd)
-  df.metab.scaled=(df.metab.scaled-metab_mean)/metab_std
+  metab_std=apply(df.rna_counts.log,1,sd)
+  df.rna_counts.scaled=(df.rna_counts.scaled-metab_mean)/metab_std
   
   class_label='CODEX主要亚型'
   df.use_sample=df.sample
-  df.use=merge(df.metab.scaled,df.use_sample[,class_label,drop=FALSE],by="row.names")
+  df.use=merge(df.rna_counts.scaled,df.use_sample[,class_label,drop=FALSE],by="row.names")
   row.names(df.use)=df.use[[1]]
   df.use=df.use[,2:ncol(df.use)]
   df.use=df.use[!is.na(df.use[class_label]),]
@@ -655,20 +613,20 @@ for (fig_num in c(1:nrow(df.cpd_kegg))){
     pathway_name=df.cpd_kegg[['Description']][fig_num]
     print(pathway_name)
     queries=unlist(strsplit(df.cpd_kegg[which(df.cpd_kegg[['Description']]==pathway_name),'query'],'/'))
-    queries=unname(unlist(sapply(queries,function(search_metabolite){(colnames(df.raw_metab)[grep(search_metabolite,colnames(df.raw_metab),ignore.case = TRUE)][1])})))
+    queries=unname(unlist(sapply(queries,function(search_metabolite){(colnames(df.raw_counts)[grep(search_metabolite,colnames(df.raw_counts),ignore.case = TRUE)][1])})))
     print(queries)
     # Try to norm in loop
     
-    df.metab.scaled=df.metab.log
-    df.metab.scaled=df.metab.scaled[,queries,drop=FALSE]
-    metab_mean=apply(df.metab.log,1,mean)
+    df.rna_counts.scaled=df.rna_counts.log
+    df.rna_counts.scaled=df.rna_counts.scaled[,queries,drop=FALSE]
+    metab_mean=apply(df.rna_counts.log,1,mean)
     metab_mean
     length(metab_mean)
-    metab_std=apply(df.metab.log,1,sd)
-    df.metab.scaled=(df.metab.scaled-metab_mean)/metab_std
+    metab_std=apply(df.rna_counts.log,1,sd)
+    df.rna_counts.scaled=(df.rna_counts.scaled-metab_mean)/metab_std
     
     df.use_sample=df.sample
-    df.use=merge(df.metab.scaled,df.use_sample[,class_label,drop=FALSE],by="row.names")
+    df.use=merge(df.rna_counts.scaled,df.use_sample[,class_label,drop=FALSE],by="row.names")
     row.names(df.use)=df.use[[1]]
     df.use=df.use[,2:ncol(df.use)]
     df.use=df.use[!is.na(df.use[class_label]),]
@@ -743,7 +701,7 @@ res
 class_label='MT2结构'
 df.use_sample=df.sample
 df.use_sample=df.use_sample[df.use_sample[['CODEX主要亚型']] %in% c('A'),]
-df.use=merge(df.metab.scaled,df.use_sample[,class_label,drop=FALSE],by='row.names')
+df.use=merge(df.rna_counts.scaled,df.use_sample[,class_label,drop=FALSE],by='row.names')
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
@@ -753,10 +711,10 @@ pathway_2_cpds=c('Uridine', 'Adenine', 'GMP', 'IMP', 'Cytidine', 'dAMP')
 pathway_cpds=list(pathway_1_cpds,pathway_2_cpds)
 
 ## Test
-df.metab.scaled=df.metab.log
-df.metab.scaled=df.metab.scaled[,queries]
+df.rna_counts.scaled=df.rna_counts.log
+df.rna_counts.scaled=df.rna_counts.scaled[,queries]
 df.use_sample=df.sample
-df.use=merge(df.metab.scaled,df.use_sample[,class_label,drop=FALSE],by="row.names")
+df.use=merge(df.rna_counts.scaled,df.use_sample[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 df.use=df.use[!is.na(df.use[class_label]),]
@@ -771,16 +729,16 @@ pathway_index=1
 queries=pathway_cpds[[pathway_index]]
 queries
 # Scale
-df.metab.scaled=df.metab.log
-# df.metab.scaled=df.metab.scaled[,queries]
-metab_mean=apply(df.metab.scaled,1,mean)
+df.rna_counts.scaled=df.rna_counts.log
+# df.rna_counts.scaled=df.rna_counts.scaled[,queries]
+metab_mean=apply(df.rna_counts.scaled,1,mean)
 metab_mean
 length(metab_mean)
-metab_std=apply(df.metab.scaled,1,sd)
-df.metab.scaled=(df.metab.scaled-metab_mean)/metab_std
+metab_std=apply(df.rna_counts.scaled,1,sd)
+df.rna_counts.scaled=(df.rna_counts.scaled-metab_mean)/metab_std
 # Generate DF.use
 df.use_sample=df.sample
-df.use=merge(df.metab.scaled,df.use_sample[,class_label,drop=FALSE],by="row.names")
+df.use=merge(df.rna_counts.scaled,df.use_sample[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 df.use=df.use[!is.na(df.use[class_label]),]
@@ -873,7 +831,7 @@ for(feature in significant_metabolites){
 # Df
 class_label='CODEX主要亚型'
 df.use_sample=df.sample
-df.use=merge(df.metab.scaled,df.use_sample[,class_label,drop=FALSE],by="row.names")
+df.use=merge(df.rna_counts.scaled,df.use_sample[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 df.use=df.use[!is.na(df.use[class_label]),]
@@ -921,10 +879,10 @@ for(feature in significant_metabolites){
 
 
 ##### Grep Analysis #####
-dim(df.raw_metab)
+dim(df.raw_counts)
 metab_num
-df.grep_lipid=get_grep_df(df.raw_metab,metab_num)
-lipid_head_num=ncol(df.grep_lipid)-(ncol(df.metab)-metab_num)
+df.grep_lipid=get_grep_df(df.raw_counts,metab_num)
+lipid_head_num=ncol(df.grep_lipid)-(ncol(df.rna_counts)-metab_num)
 headgroups=colnames(df.grep_lipid)
 headgroups
 "

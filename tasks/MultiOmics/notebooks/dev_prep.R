@@ -87,7 +87,31 @@ BiocManager::install("survminer",dependencies = TRUE, INSTALL_opts = '--no-lock'
 library(KEGGREST)
 BiocManager::install("clusterProfiler", dependencies = TRUE, INSTALL_opts = '--no-lock')
 library(clusterProfiler)
-
+BiocManager::install("pathview")
+BiocManager::install("org.Hs.eg.db")
+library('org.Hs.eg.db')
+## Test 
+library('org.Hs.eg.db')
+columns(org.Hs.eg.db)
+ids=colnames(df.metab)[1:10000]
+ids
+org.Hs.eg.db$ENSEMBL
+gene=mapIds(org.Hs.eg.db,keys=ids,keytype="ENSEMBL",column="ENTREZID")
+kegg_result=enrichKEGG(
+  gene,
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  use_internal_data = FALSE
+)
+kegg_result
+kegg_table <- na.omit(as.data.frame(kegg_result))
+kegg_table$Description
+##
 # KEGGREST
 if (!require("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
