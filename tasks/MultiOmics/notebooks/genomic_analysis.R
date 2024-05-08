@@ -28,7 +28,7 @@ source('utils.R')
 ##### Metab #####
 # filepath.rna_counts='D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/lipid.csv'
 filepath.rna_counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/rna/counts.csv'
-filepath.sample='/home/suh/workstation/MetabSubtype/tasks/Subtype/results/20240406/cluster_7e-2.csv'
+filepath.sample='/home/suh/workstation/MetabSubtype/tasks/Subtype/results/20240406/lipid_cluster_7e-2.csv'
 df.rna_counts<-read.csv(filepath.rna_counts, header= TRUE, check.names=F,row.names=1)
 df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F,row.names=1)
 df.rna_counts[1:5,1:5]
@@ -352,7 +352,7 @@ df.plsda_cpd=merge(df_plsda$variates,df.sample[,c('CODEX主要亚型'),drop=FALS
 ##### KEGG #####
 
 # Build Dataset
-class_label="nmf_2_clusters"
+class_label="kmeans_2_clusters"
 df.use_sample=df.sample
 df.use_sample=df.use_sample[!is.na(df.use_sample[class_label]),]
 
@@ -371,11 +371,10 @@ df.test.results$wilcox=apply(df.test[, 1:metab_num], 2,
 df.test.results$wilcox_BH=p.adjust(df.test.results$wilcox,method="BH")
 df.test.results$FC <- apply(df.test[,1:metab_num], 2, 
                             function(x) 
-                              mean(as.numeric(x[which(df.test[class_label] == types[1])]))/
-                              mean(as.numeric(x[which(df.test[class_label] == types[2])])))
+                              mean(as.numeric(x[which(df.test[class_label] == types[2])]))/
+                              mean(as.numeric(x[which(df.test[class_label] == types[1])])))
 df.test.results$log2FC<- log2(df.test.results$FC)
 dim(df.test.results)
-
 # Read Stat Results and Do KEGG
 filepath.stat.counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/results/20240507/counts_stat.csv'
 df.test.results<-read.csv(filepath.stat.counts, header= TRUE, check.names=F,row.names=1)
@@ -385,7 +384,6 @@ colnames(df.test.results)[which(names(df.test.results) =="geneid")] <- "cpd_id"
 pvalue_cutoff=5e-2
 fc_up_cutoff=1.2
 fc_down_cutoff=1.2
-library('org.Hs.eg.db')
 
 df.test.results$is_use=(df.test.results$wilcox<=pvalue_cutoff)&((df.test.results$FC>=fc_up_cutoff)|(df.test.results$FC<=fc_down_cutoff))
 df.test.results.up=df.test.results[df.test.results$log2FC>0,]

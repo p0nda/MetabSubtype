@@ -1,0 +1,219 @@
+```{r}
+library(NMF)
+library(stringr)
+# library(eoffice)
+library(dplyr)
+library(ComplexHeatmap)
+library(ggplot2)
+# library(rJava)
+# library(xlsx)
+# library(RColorBrewer)
+library(circlize)
+library(umap)
+library(Rtsne)
+library(ggrepel)
+library(ggplot2)
+library(clusterProfiler)
+library(KEGGREST)
+# library(ConsensusClusterPlus)
+library(viridis)
+library(survminer)
+library(survival)
+
+
+getwd()
+setwd("~/workstation/MetabSubtype/tasks/Subtype/notebooks/")
+source('utils.R')
+
+```
+
+# Prepare Data
+
+## Preprocess
+
+-   Log
+
+-   Delete Odd Chain
+
+-   Scale
+
+```{r}
+
+##### Metab #####
+LABEL_NUM=0
+filepath.metab='~/workstation/MetabSubtype/tasks/Subtype/data/Using/lipid.csv'
+filepath.sample='~/workstation/MetabSubtype/tasks/Subtype/data/Using/sample.csv'
+df.metab<-read.csv(filepath.metab, header= TRUE, check.names=F,row.names=1)
+df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
+df.metab[1:5,1:5]
+dim(df.metab)
+length(unique((df.metab[,1])))
+unique(df.metab[,1])
+df.metab[,1]
+df.metab[df.metab=='']=NA
+df.sample[df.sample=='']=NA
+df.sample[df.sample=='Neg']=NA
+# df.sample=df.sample[!is.na(df.sample['Sample Name']),c('Sample Name','主要分型','生存时间分组','MT2结构')]
+df.sample=df.sample[!is.na(df.sample['Sample Name']),]
+df.sample['Sample Name']
+row.names(df.sample)=df.sample[['Sample Name']]
+df.sample=df.sample[rownames(df.metab),]
+df.sample[match('1520',rownames(df.sample)),'oss']=0
+dim(df.metab)
+metab_num=ncol(df.metab)
+df.raw_metab=df.metab[,1:metab_num]
+dim(df.sample)
+dim(merge(df.metab,df.sample,by.x="row.names",by.y="Sample Name"))
+# Odd Chain
+dim(df.raw_metab)
+df.raw_metab=drop_odd_chain_cols(df.raw_metab)
+dim(df.raw_metab)
+metab_num=dim(df.raw_metab)[2]
+# Normalize Data
+df.raw_metab.log=log2(df.raw_metab)
+df.raw_metab.scaled=df.raw_metab.log
+raw_metab_mean=apply(df.raw_metab.log,1,mean)
+raw_metab_std=apply(df.raw_metab.log,1,sd)
+df.raw_metab.scaled=(df.raw_metab.scaled-raw_metab_mean)/raw_metab_std
+df.raw_metab.scaled=as.data.frame(nneg(as.matrix(df.raw_metab.scaled),method='min'))
+colnames(df.raw_metab.scaled)
+dim(df.raw_metab.scaled)
+```
+
+## Dimension Reduction
+
+### PCA
+
+```{r}
+pca.lipid=prcomp(df.raw_metab.scaled,scale.=TRUE)
+summary(pca.lipid)
+
+```
+
+```{r}
+
+df.metab.pca=pca.lipid$x
+using_num=51
+df.metab.pca=df.metab.pca[,1:using_num]
+df.metab.pca=as.data.frame(nneg(as.matrix(df.metab.pca),method='min'))
+```
+
+# Clustering
+
+```{r}
+
+df.use=df.metab.pca
+# df.use=df.raw_metab.scaled
+
+set.seed(120)
+nmf_k=3
+kmeans_k=3
+df.cluster_result=perform_clustering(df.use, metab_num=ncol(df.use),nmf_k, kmeans_k)
+df.cluster_result.correction=df.cluster_result
+
+dim(df.cluster_result)
+dim(df.use)
+
+```
+
+```{r}
+df.cluster_result.correction
+```
+
+## Survival Test
+
+```{r fig.height=6, fig.width=10}
+
+# 1203948 321
+set.seed(321)
+nmf_k=3
+kmeans_k=3
+df.cluster_result=perform_clustering(df.use, metab_num=ncol(df.use),nmf_k, kmeans_k)
+df.cluster_result.correction=df.cluster_result
+
+dim(df.cluster_result)
+dim(df.use)
+
+time_label_col='os'
+event_label_col=paste0(time_label_col,'s')
+##### Survival #####
+df.use.os=merge(df.cluster_result.correction,df.sample[,c(time_label_col,event_label_col)],by='row.names')
+df.use.os=df.use.os[order(df.use.os[[time_label_col]]),,drop=FALSE]
+# df.use.os=df.use.os[1:(nrow(df.use.os)-1),]
+surv_object=Surv(df.use.os[[time_label_col]],df.use.os[[event_label_col]])
+# K-MEANS
+kmeans_fit=survfit(surv_object~kmeans_2_clusters,data=df.use.os)
+kmeans_plot=ggsurvplot(kmeans_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
+# NMF
+nmf_fit=survfit(surv_object~nmf_2_clusters,data=df.use.os)
+nmf_plot=ggsurvplot(nmf_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
+# nmf_plot
+# Combine
+arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,pval = TRUE,title=toupper(time_label_col))
+```
+
+## Save Result
+
+```{r}
+df.sample_cluster=merge(df.sample,df.cluster_result.correction,by="row.names")
+row.names(df.sample_cluster)=df.sample_cluster[[1]]
+df.sample_cluster=df.sample_cluster[,2:ncol(df.sample_cluster)]
+filepath.cluster='~/workstation/MetabSubtype/tasks/Subtype/results/20240508/lipid_cluster_1e-2.csv'
+#
+# write.csv(df.sample_cluster,filepath.cluster)
+#
+```
+
+# Analysis
+
+## Heatmap
+
+```{r fig.height=8, fig.width=8}
+
+df.use=merge(df.raw_metab.scaled,df.cluster_result.correction,by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+dim(df.use)
+p_cutoff=5e-2
+
+draw_single_heatmap(df.use,metab_num,'kmeans_3_clusters',p_cutoff,TRUE)
+draw_single_heatmap(df.use,metab_num,'nmf_3_clusters',p_cutoff,TRUE )
+draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',p_cutoff,TRUE )
+draw_single_heatmap(df.use,metab_num,'nmf_2_clusters',p_cutoff,TRUE )
+```
+
+## Survival
+
+```{r fig.height=6, fig.width=10}
+
+time_label_col='os'
+event_label_col=paste0(time_label_col,'s')
+##### Survival #####
+df.use.os=merge(df.cluster_result.correction,df.sample[,c(time_label_col,event_label_col)],by='row.names')
+df.use.os=df.use.os[order(df.use.os[[time_label_col]]),,drop=FALSE]
+
+surv_object=Surv(df.use.os[[time_label_col]],df.use.os[[event_label_col]])
+
+# K-MEANS
+kmeans_fit=survfit(surv_object~kmeans_2_clusters,data=df.use.os)
+kmeans_plot=ggsurvplot(kmeans_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
+# NMF
+nmf_fit=survfit(surv_object~nmf_2_clusters,data=df.use.os)
+nmf_plot=ggsurvplot(nmf_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
+# nmf_plot
+# Combine
+arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,pval = TRUE,title=toupper(time_label_col))
+
+
+# K-MEANS
+kmeans_fit=survfit(surv_object~kmeans_3_clusters,data=df.use.os)
+kmeans_plot=ggsurvplot(kmeans_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
+# NMF
+nmf_fit=survfit(surv_object~nmf_3_clusters,data=df.use.os)
+nmf_plot=ggsurvplot(nmf_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
+# nmf_plot
+# Combine
+arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,pval = TRUE,title=toupper(time_label_col))
+
+```

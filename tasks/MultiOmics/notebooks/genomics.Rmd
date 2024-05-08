@@ -20,6 +20,8 @@ library(survminer)
 library(survival)
 library(mixOmics)
 library(patchwork)
+library('org.Hs.eg.db')
+
 ```
 
 # Prepare Data
@@ -53,20 +55,233 @@ df.sample=df.sample[rownames(df.rna_counts),]
 df.sample=na.omit(df.sample)
 dim(df.sample)
 
-metab_num=ncol(df.rna_counts)
-df.raw_counts=df.rna_counts[,1:metab_num]
-df.rna_counts.log=log2(df.raw_counts)
-dim(df.rna_counts)
-
 ```
 
 ## Filter
 
 ```{r}
-keep_cols=colnames(df.raw_counts)[colSums(df.raw_counts>20)>=110]
-length(keep_cols)
+smallestGroupSize=min(nrow(df.sample[df.sample['nmf_2_clusters']==1,]),nrow(df.sample[df.sample['nmf_2_clusters']==2,]))
+keep_cols=colnames(df.raw_counts)[colSums(df.raw_counts>20)>=smallestGroupSize]
+df.rna_counts=df.rna_counts[,keep_cols]
+metab_num=ncol(df.rna_counts)
+
+```
+
+## Norm
+
+```{r}
+# df.raw_counts=df.rna_counts[,keep_cols]
+# df.rna_counts.log=log2(df.raw_counts)
+# dim(df.rna_counts)
+```
+
+# KEGG
+
+## Prepare Data
+
+## Statistics before KEGG
+
+```{r}
+
+# Before KEGG Analysis
+df.test=df.use
+types=c('1','2')
+df.test.results=data.frame(geneid = (colnames(df.test)[1:metab_num]))
+df.test.results$wilcox=apply(df.test[, 1:metab_num], 2,
+                             function(x) unlist(wilcox.test(as.numeric(x) ~ df.test[[class_label]], data = df.test, exact = FALSE)[3]))
+df.test.results$wilcox_BH=p.adjust(df.test.results$wilcox,method="BH")
+df.test.results$FC <- apply(df.test[,1:metab_num], 2, 
+                            function(x) 
+                              mean(as.numeric(x[which(df.test[class_label] == types[2])]))/
+                              mean(as.numeric(x[which(df.test[class_label] == types[1])])))
+df.test.results$log2FC<- log2(df.test.results$FC)
+
+```
+
+Save data
+
+```{r}
+# write.csv(df.test.results,'/home/suh/workstation/MetabSubtype/tasks/MultiOmics/results/20240507/k_up_counts_stat.csv')
+```
+
+## KEGG
+
+### Read Data
+
+```{r}
+# filepath.stat.counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/results/20240507/counts_stat.csv'
+# df.test.results<-read.csv(filepath.stat.counts, header= TRUE, check.names=F,row.names=1)
+colnames(df.test.results)[which(names(df.test.results) =="geneid")] <- "cpd_id"
+```
+
+### After Process
+
+```{r}
+
+pvalue_cutoff=5e-2
+fc_up_cutoff=1.2
+fc_down_cutoff=1.2
+
+
+df.test.results$is_use=(df.test.results$wilcox<=pvalue_cutoff)&((df.test.results$FC>=fc_up_cutoff)|(df.test.results$FC<=fc_down_cutoff))
+df.test.results.up=df.test.results[df.test.results$log2FC>0,]
+df.test.results.down=df.test.results[df.test.results$log2FC<0,]
+
+```
+
+### Up
+
+```{r}
+used_ens_ids=df.test.results.up$cpd_id[df.test.results.up$is_use]
+
+print(paste0('used metab number is ',length(used_ens_ids)))
+columns(org.Hs.eg.db)
+
+used_entrz_ids=mapIds(org.Hs.eg.db,keys=used_ens_ids,keytype="ENSEMBL",column="ENTREZID")
+kegg_result=enrichKEGG(
+  used_entrz_ids,
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  use_internal_data = FALSE
+)
+kegg_table <- na.omit(as.data.frame(kegg_result))
+
+kegg_table <- kegg_table[kegg_table$Count > 2,]
+
+kegg_table$metabs_mean <- apply(kegg_table, 1, path_avelog2FC,df.test.results=df.test.results)
+# calculate fold enrichment
+kegg_table[1:5,3:8]
+dim(kegg_table)
+kegg_table$FoldEnrich <- apply(kegg_table, 1, 
+                               function(x) as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[1])/
+                                 as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+
+# Generate Draw Table
+kegg_table_draw=kegg_table
+unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
+kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+
+pathway_names=unique(kegg_table_draw$Description)
+
+kegg_table_draw
+
+# Figure using FDR as X
+kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
+kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-15):nrow(kegg_table_draw),]
+dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
+# write.csv(kegg_table.mt2,paste0(dirpath,'counts_pathway_up.csv',collapse = '/'))
+
+kegg_table_draw$FDR
+kegg_table_draw$FoldEnrich
+p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(3, 15), breaks = c(seq(1,3,0.2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(2,8,2)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "RNA Upregulated", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+# pdf(paste(dirpath,'rna_counts_up.pdf',sep = ''),12,7)
+print(p)
+
+```
+
+### Down
+
+```{r}
+used_ens_ids=df.test.results.down$cpd_id[df.test.results.down$is_use]
+
+print(paste0('used metab number is ',length(used_ens_ids)))
+columns(org.Hs.eg.db)
+#used_entrz_ids=c()
+used_entrz_ids=mapIds(org.Hs.eg.db,keys=used_ens_ids,keytype="ENSEMBL",column="ENTREZID")
+
+
+kegg_result=enrichKEGG(
+  used_entrz_ids,
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  use_internal_data = FALSE
+)
+kegg_table <- na.omit(as.data.frame(kegg_result))
+kegg_table <- kegg_table[kegg_table$Count > 2,]
+
+kegg_table$metabs_mean <- apply(kegg_table, 1, path_avelog2FC,df.test.results=df.test.results)
+# calculate fold enrichment
+kegg_table[1:5,3:8]
+dim(kegg_table)
+kegg_table$FoldEnrich <- apply(kegg_table, 1, 
+                               function(x) as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[1])/
+                                 as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+
+# Generate Draw Table
+kegg_table_draw=kegg_table
+unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
+kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+
+pathway_names=unique(kegg_table_draw$Description)
+
+kegg_table_draw
+
+# Figure using FDR as X
+kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
+kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-15):nrow(kegg_table_draw),]
+dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
+# write.csv(kegg_table.mt2,paste0(dirpath,'counts_pathway_down.csv',collapse = '/'))
+
+kegg_table_draw$FDR
+kegg_table_draw$FoldEnrich
+p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(3, 15), breaks = c(seq(1,3,0.2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(1,3,0.5)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "RNA Downregulated", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+# pdf(paste(dirpath,'rna_counts_up.pdf',sep = ''),12,7)
+print(p)
+
 ```
 
 ```{r}
 
 ```
+
+### Plot
+
+###  

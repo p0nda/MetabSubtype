@@ -26,8 +26,8 @@ getwd()
 setwd("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/notebooks/")
 source('utils.R')
 ##### Metab #####
-# filepath.metab='D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/lipid.csv'
-filepath.metab='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/Using/metab.csv'
+filepath.metab='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/Using/lipid.csv'
+# filepath.metab='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/Using/metab.csv'
 filepath.sample='/home/suh/workstation/MetabSubtype/tasks/Subtype/results/20240406/cluster_7e-2.csv'
 df.metab<-read.csv(filepath.metab, header= TRUE, check.names=F,row.names=1)
 df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F,row.names=1)
@@ -43,17 +43,17 @@ df.sample[df.sample=='Neg']=NA
 dim(df.sample)
 df.sample=df.sample[rownames(df.metab),]
 dim(df.sample)
-
+dim(merge(df.sample,df.metab,by="row.names"))
 dim(df.metab)
 metab_num=ncol(df.metab)
 df.raw_metab=df.metab[,1:metab_num]
 df.metab.log=log2(df.raw_metab)
 
 # Odd Chain
-# dim(df.raw_metab)
-# df.raw_metab=drop_odd_chain_cols(df.raw_metab)
-# dim(df.raw_metab)
-# metab_num=dim(df.raw_metab)[2]
+dim(df.raw_metab)
+df.raw_metab=drop_odd_chain_cols(df.raw_metab)
+dim(df.raw_metab)
+metab_num=dim(df.raw_metab)[2]
 
 ##### Pathway #####
 # Prepare KEGG Data

@@ -4,9 +4,9 @@ library(stringr)
 library(dplyr)
 library(ComplexHeatmap)
 library(ggplot2)
-library(rJava)
-library(xlsx)
-library(RColorBrewer)
+# library(rJava)
+# library(xlsx)
+# library(RColorBrewer)
 library(circlize)
 library(umap)
 library(Rtsne)
@@ -14,7 +14,7 @@ library(ggrepel)
 library(ggplot2)
 library(clusterProfiler)
 library(KEGGREST)
-library(ConsensusClusterPlus)
+# library(ConsensusClusterPlus)
 library(viridis)
 library(survminer)
 library(survival)
@@ -26,35 +26,15 @@ source('utils.R')
 
 set.seed(6)
 
-##### Metab #####
-# Prepare Data
-LABEL_NUM=0
-# filepath.metab='D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/lipid.csv'
-# filepath.metab='D:/repositories/liver-cancer-tasks/Tissue/data/Using/metab.csv'
-filepath.metab='~/workstation/MetabSubtype/tasks/Subtype/data/Using/metab.csv'
-filepath.sample='~/workstation/MetabSubtype/tasks/Subtype/data/Using/sample.csv'
-df.metab<-read.csv(filepath.metab, header= TRUE, check.names=F,row.names=1)
-df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
-df.metab[1:5,1:5]
-dim(df.metab)
-length(unique((df.metab[,1])))
-unique(df.metab[,1])
-df.metab[,1]
-df.metab[df.metab=='']=NA
-df.sample[df.sample=='']=NA
-df.sample[df.sample=='Neg']=NA
-# df.sample=df.sample[!is.na(df.sample['Sample Name']),c('Sample Name','主要分型','生存时间分组','MT2结构')]
-df.sample=df.sample[!is.na(df.sample['Sample Name']),]
-df.sample['Sample Name']
-row.names(df.sample)=df.sample[['Sample Name']]
-df.sample=df.sample[rownames(df.metab),]
-df.sample[match('1520',rownames(df.sample)),'oss']=0
-dim(df.metab)
-metab_num=ncol(df.metab)
 df.raw_metab=df.metab[,1:metab_num]
-df.raw_metab.log=log2(df.raw_metab)
-df.raw_metab[1]
+d
+# Odd Chain
+dim(df.raw_metab)
+df.raw_metab=drop_odd_chain_cols(df.raw_metab)
+dim(df.raw_metab)
+metab_num=dim(df.raw_metab)[2]
 # Normalize Data
+df.raw_metab.log=log2(df.raw_metab)
 df.raw_metab.scaled=df.raw_metab.log
 raw_metab_mean=apply(df.raw_metab.log,1,mean)
 raw_metab_mean
@@ -65,11 +45,14 @@ df.raw_metab.scaled=as.data.frame(nneg(as.matrix(df.raw_metab.scaled),method='mi
 colnames(df.raw_metab.scaled)
 dim(df.raw_metab.scaled)
 order(df.sample[['os']])
-df.sample[order(df.sample[['os']]),c('os','oss')]
+
+
+
+
 ##### Cluster #####
 df.raw_metab.scaled
 # Consensus 
-setwd("D:/repositories/liver-cancer-tasks/Tissue/results/20240406/")
+# setwd("D:/repositories/liver-cancer-tasks/Tissue/results/20240406/")
 # rcc = ConsensusClusterPlus(data.matrix(df.raw_metab.scaled), 
                            maxK = 8, 
                            reps = 1000, 
@@ -86,6 +69,8 @@ df.use=merge(df.raw_metab.scaled,df.use_sample[,class_label,drop=FALSE],by="row.
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
+
+set.seed(120)
 nmf_k=3
 kmeans_k=3
 df.cluster_result=perform_clustering(df.raw_metab.scaled, metab_num,nmf_k, kmeans_k)
@@ -95,7 +80,7 @@ dim(df.cluster_result)
 dim(df.use)
 
 # Use Saved Matrix
-filepath.cluster='~/workstation/MetabSubtype/tasks/Subtype/results/20240406/cluster_7e-2.csv'
+# filepath.cluster='~/workstation/MetabSubtype/tasks/Subtype/results/20240406/cluster_7e-2.csv'
 df.cluster_result<-read.csv(filepath.cluster, header= TRUE, check.names=F,row.names=1)
 df.cluster_result.correction=df.cluster_result
 .Random.seed[1:5]
