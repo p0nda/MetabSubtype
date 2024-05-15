@@ -88,6 +88,12 @@ library(KEGGREST)
 BiocManager::install("clusterProfiler", dependencies = TRUE, INSTALL_opts = '--no-lock')
 library(clusterProfiler)
 BiocManager::install("pathview")
+BiocManager::install("DESeq2")
+BiocManager::install("KEGGREST")
+BiocManager::install("ComBat")
+BiocManager::install("sva")
+
+
 BiocManager::install("org.Hs.eg.db")
 library('org.Hs.eg.db')
 ## Test 

@@ -20,6 +20,7 @@ library(survminer)
 library(survival)
 library(mixOmics)
 library(patchwork)
+library(DESeq2)
 library('org.Hs.eg.db')
 
 ```
@@ -37,7 +38,7 @@ setwd("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/notebooks/")
 source('utils.R')
 ##### Metab #####
 # filepath.rna_counts='D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/lipid.csv'
-filepath.rna_counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/rna/counts.csv'
+filepath.rna_counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/rna/deseqed_counts.csv'
 filepath.sample='/home/suh/workstation/MetabSubtype/tasks/Subtype/results/20240406/cluster_7e-2.csv'
 df.rna_counts<-read.csv(filepath.rna_counts, header= TRUE, check.names=F,row.names=1)
 df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F,row.names=1)
@@ -61,18 +62,40 @@ dim(df.sample)
 
 ```{r}
 smallestGroupSize=min(nrow(df.sample[df.sample['nmf_2_clusters']==1,]),nrow(df.sample[df.sample['nmf_2_clusters']==2,]))
-keep_cols=colnames(df.raw_counts)[colSums(df.raw_counts>20)>=smallestGroupSize]
+keep_cols=colnames(df.rna_counts)[colSums(df.rna_counts>20)>=smallestGroupSize]
 df.rna_counts=df.rna_counts[,keep_cols]
 metab_num=ncol(df.rna_counts)
-
+metab_num
+df.rna_counts
 ```
 
 ## Norm
 
 ```{r}
-# df.raw_counts=df.rna_counts[,keep_cols]
-# df.rna_counts.log=log2(df.raw_counts)
-# dim(df.rna_counts)
+
+df.sample$batch=1
+df.sample[str_detect(rownames(df.sample), "T"),'batch']=2
+df.sample$batch
+
+
+```
+
+#### Batch Effect
+
+```{r}
+var.data <- apply(df.rna_counts, 2, var)
+df.rna_counts[,var.data==0]
+df.rna_counts[is.na(df.rna_counts)]
+batch=df.sample$batch
+df.rna.combat=ComBat(dat=t(df.rna_counts), batch=batch, par.prior=TRUE, prior.plots=TRUE)
+
+# non-parametric adjustment, mean-only version
+combat_edata2 = ComBat(dat=edata, batch=batch, mod=NULL, par.prior=FALSE, mean.only=TRUE)
+
+# reference-batch version, with covariates
+combat_edata3 = ComBat(dat=edata, batch=batch, mod=mod, par.prior=TRUE, ref.batch=3)
+ 
+
 ```
 
 # KEGG
@@ -83,10 +106,17 @@ metab_num=ncol(df.rna_counts)
 
 ```{r}
 
-# Before KEGG Analysis
+class_label="nmf_2_clusters"
+df.use_sample=df.sample
+df.use_sample=df.use_sample[!is.na(df.use_sample[class_label]),]
+
+df.use=merge(df.raw_counts,df.use_sample[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]# Before KEGG Analysis
 df.test=df.use
+dim(df.use)
 types=c('1','2')
-df.test.results=data.frame(geneid = (colnames(df.test)[1:metab_num]))
+df.test.results=data.frame(cpd_id = (colnames(df.test)[1:metab_num]))
 df.test.results$wilcox=apply(df.test[, 1:metab_num], 2,
                              function(x) unlist(wilcox.test(as.numeric(x) ~ df.test[[class_label]], data = df.test, exact = FALSE)[3]))
 df.test.results$wilcox_BH=p.adjust(df.test.results$wilcox,method="BH")
@@ -101,7 +131,38 @@ df.test.results$log2FC<- log2(df.test.results$FC)
 Save data
 
 ```{r}
-# write.csv(df.test.results,'/home/suh/workstation/MetabSubtype/tasks/MultiOmics/results/20240507/k_up_counts_stat.csv')
+# write.csv(df.test.results,'/home/suh/workstation/MetabSubtype/tasks/MultiOmics/results/20240507/kmeans_counts_stat.csv',row.names = FALSE)
+```
+
+```{r}
+cal_fc<-function(x){
+mean(as.numeric(x[which(df.test[class_label] == types[2])]))/mean(as.numeric(x[which(df.test[class_label] == types[1])]))
+}
+cal_fc(df.test[,1])
+x=df.test[,1]
+mean(as.numeric())/
+                              mean(as.numeric(x[which(df.test[class_label] == types[1])]))
+
+df.test[,c(1,ncol(df.test)),drop=FALSE]
+x
+
+mean(as.numeric(x[which(df.test[class_label] == types[2])]))
+mean(as.numeric(x[which(df.test[class_label] == types[1])]))
+
+log2(1.161051)
+dim(df.test)
+apply(df.test[,1:metab_num], 2, 
+                            function(x) 
+                              mean(as.numeric(x[which(df.test[class_label] == types[2])]))/
+                              mean(as.numeric(x[which(df.test[class_label] == types[1])])))
+```
+
+```         
+```
+
+```{r}
+
+
 ```
 
 ## KEGG
@@ -109,9 +170,24 @@ Save data
 ### Read Data
 
 ```{r}
-# filepath.stat.counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/results/20240507/counts_stat.csv'
-# df.test.results<-read.csv(filepath.stat.counts, header= TRUE, check.names=F,row.names=1)
-colnames(df.test.results)[which(names(df.test.results) =="geneid")] <- "cpd_id"
+filepath.stat.counts='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240515/rna_stat.csv'
+df.test.results<-read.csv(filepath.stat.counts, header= TRUE, check.names=F,row.names=1)
+# if(ncol(df.test.results)>4){
+#   df.test.results=df.test.results[2:5]
+# }
+df.test.results
+# colnames(df.test.results)[which(names(df.test.results) =="geneid")] <- "cpd_id"
+```
+
+```{r}
+rownames(df.test.results)=df.test.results[,1]
+
+df.test %>%
+  group_by(nmf_2_clusters) %>%
+  summarise(ENSG00000000003=mean(ENSG00000000003))
+```
+
+```         
 ```
 
 ### After Process
@@ -119,20 +195,28 @@ colnames(df.test.results)[which(names(df.test.results) =="geneid")] <- "cpd_id"
 ```{r}
 
 pvalue_cutoff=5e-2
-fc_up_cutoff=1.2
-fc_down_cutoff=1.2
+fc_up_cutoff=2
+fc_down_cutoff=1/fc_up_cutoff
 
+df.test.results$is_use=(df.test.results$padj<=pvalue_cutoff)&(abs(df.test.results$log2FoldChange)>=log2(fc_up_cutoff))
+df.test.results.up=df.test.results[df.test.results$log2FoldChange>0,]
+df.test.results.down=df.test.results[df.test.results$log2FoldChange<0,]
 
-df.test.results$is_use=(df.test.results$wilcox<=pvalue_cutoff)&((df.test.results$FC>=fc_up_cutoff)|(df.test.results$FC<=fc_down_cutoff))
-df.test.results.up=df.test.results[df.test.results$log2FC>0,]
-df.test.results.down=df.test.results[df.test.results$log2FC<0,]
-
+dim(df.test.results.up)
+dim(df.test.results.down)
 ```
 
 ### Up
 
+ 
+
 ```{r}
-used_ens_ids=df.test.results.up$cpd_id[df.test.results.up$is_use]
+used_ens_ids
+df.test.results.up
+```
+
+```{r fig.height=6, fig.width=12}
+used_ens_ids=rownames(df.test.results.up[df.test.results.up$is_use,])
 
 print(paste0('used metab number is ',length(used_ens_ids)))
 columns(org.Hs.eg.db)
@@ -153,7 +237,7 @@ kegg_table <- na.omit(as.data.frame(kegg_result))
 
 kegg_table <- kegg_table[kegg_table$Count > 2,]
 
-kegg_table$metabs_mean <- apply(kegg_table, 1, path_avelog2FC,df.test.results=df.test.results)
+# kegg_table$metabs_mean <- apply(kegg_table, 1, path_avelog2FC,df.test.results=df.test.results)
 # calculate fold enrichment
 kegg_table[1:5,3:8]
 dim(kegg_table)
@@ -175,7 +259,7 @@ kegg_table_draw
 
 # Figure using FDR as X
 kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
-kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-15):nrow(kegg_table_draw),]
+kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-min((nrow(kegg_table_draw)-1),15)):nrow(kegg_table_draw),]
 dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
 # write.csv(kegg_table.mt2,paste0(dirpath,'counts_pathway_up.csv',collapse = '/'))
 
@@ -205,8 +289,8 @@ print(p)
 
 ### Down
 
-```{r}
-used_ens_ids=df.test.results.down$cpd_id[df.test.results.down$is_use]
+```{r fig.height=6, fig.width=12}
+used_ens_ids=rownames(df.test.results.down[df.test.results.down$is_use,])
 
 print(paste0('used metab number is ',length(used_ens_ids)))
 columns(org.Hs.eg.db)
@@ -228,7 +312,7 @@ kegg_result=enrichKEGG(
 kegg_table <- na.omit(as.data.frame(kegg_result))
 kegg_table <- kegg_table[kegg_table$Count > 2,]
 
-kegg_table$metabs_mean <- apply(kegg_table, 1, path_avelog2FC,df.test.results=df.test.results)
+# kegg_table$metabs_mean <- apply(kegg_table, 1, path_avelog2FC,df.test.results=df.test.results)
 # calculate fold enrichment
 kegg_table[1:5,3:8]
 dim(kegg_table)
@@ -250,7 +334,7 @@ kegg_table_draw
 
 # Figure using FDR as X
 kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
-kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-15):nrow(kegg_table_draw),]
+kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-10):nrow(kegg_table_draw),]
 dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
 # write.csv(kegg_table.mt2,paste0(dirpath,'counts_pathway_down.csv',collapse = '/'))
 
@@ -261,7 +345,7 @@ p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
   scale_y_discrete(limits = kegg_table_draw[['Description']])+
   scale_size(range = c(3, 15), breaks = c(seq(1,3,0.2))) +
   # scale_color_gradient(low="blue",high = "red")+
-  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(1,3,0.5)))+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(10,17,2)))+
   #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
   theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
   # coord_fixed(ratio = 0.4) +
@@ -280,8 +364,14 @@ print(p)
 
 ```{r}
 
+df.sample
+
 ```
 
-### Plot
+# Plot
 
-###  
+## Heatmap 
+
+```{r}
+
+```
