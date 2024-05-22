@@ -92,6 +92,8 @@ BiocManager::install("DESeq2")
 BiocManager::install("KEGGREST")
 BiocManager::install("ComBat")
 BiocManager::install("sva")
+BiocManager::install("limma")
+BiocManager::install("edgeR")
 
 
 BiocManager::install("org.Hs.eg.db")

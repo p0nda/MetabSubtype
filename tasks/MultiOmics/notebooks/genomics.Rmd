@@ -20,9 +20,14 @@ library(survminer)
 library(survival)
 library(mixOmics)
 library(patchwork)
+
+library(limma)
+library(edgeR)
 library(DESeq2)
 library('org.Hs.eg.db')
 
+
+source('~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/utils.R')
 ```
 
 # Prepare Data
@@ -38,22 +43,33 @@ setwd("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/notebooks/")
 source('utils.R')
 ##### Metab #####
 # filepath.rna_counts='D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/lipid.csv'
-filepath.rna_counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/rna/deseqed_counts.csv'
-filepath.sample='/home/suh/workstation/MetabSubtype/tasks/Subtype/results/20240406/cluster_7e-2.csv'
+filepath.raw_counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/rna/counts.csv'
+df.raw_counts<-read.csv(filepath.raw_counts, header= TRUE, check.names=F,row.names=1)
+
+filepath.rna_counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/results/20240518_combat_deseq/nmf.csv'
+filepath.sample='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/Using/sample.csv'
+filepath.cluster_result='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/metab/cluster_result.csv'
 df.rna_counts<-read.csv(filepath.rna_counts, header= TRUE, check.names=F,row.names=1)
-df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F,row.names=1)
+df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
+df.cluster_result<-read.csv(filepath.cluster_result, header= TRUE, check.names=F,row.names=1)
 df.rna_counts[1:5,1:5]
 dim(df.rna_counts)
 length(unique((df.rna_counts[,1])))
 unique(df.rna_counts[,1])
 df.rna_counts[,1]
 df.rna_counts[df.rna_counts=='']=NA
+
+# Sample DF Process
 df.sample[df.sample=='']=NA
 df.sample[df.sample=='Neg']=NA
+df.sample=df.sample[!is.na(df.sample['Sample Name']),]
+df.sample['Sample Name']
+row.names(df.sample)=df.sample[['Sample Name']]
+df.sample[match('1520',rownames(df.sample)),'oss']=0
 # df.sample=df.sample[!is.na(df.sample['Sample Name']),c('Sample Name','主要分型','生存时间分组','MT2结构')]
 dim(df.sample)
-df.sample=df.sample[rownames(df.rna_counts),]
-df.sample=na.omit(df.sample)
+# df.sample=df.sample[rownames(df.rna_counts),]
+# df.sample=na.omit(df.sample,'all')
 dim(df.sample)
 
 ```
@@ -61,12 +77,12 @@ dim(df.sample)
 ## Filter
 
 ```{r}
-smallestGroupSize=min(nrow(df.sample[df.sample['nmf_2_clusters']==1,]),nrow(df.sample[df.sample['nmf_2_clusters']==2,]))
-keep_cols=colnames(df.rna_counts)[colSums(df.rna_counts>20)>=smallestGroupSize]
-df.rna_counts=df.rna_counts[,keep_cols]
-metab_num=ncol(df.rna_counts)
-metab_num
-df.rna_counts
+# smallestGroupSize=min(nrow(df.sample[df.sample['nmf_2_clusters']==1,]),nrow(df.sample[df.sample['nmf_2_clusters']==2,]))
+# keep_cols=colnames(df.rna_counts)[colSums(df.rna_counts>20)>=smallestGroupSize]
+# df.rna_counts=df.rna_counts[,keep_cols]
+# metab_num=ncol(df.rna_counts)
+# metab_num
+# df.rna_counts
 ```
 
 ## Norm
@@ -98,9 +114,564 @@ combat_edata3 = ComBat(dat=edata, batch=batch, mod=mod, par.prior=TRUE, ref.batc
 
 ```
 
-# KEGG
+# edgeR Process
 
 ## Prepare Data
+
+### Preprocess
+
+```{r}
+df.using=merge(df.raw_counts,df.cluster_result,by="row.names")
+rownames(df.using)=df.using[,1]
+df.using=df.using[,2:ncol(df.using)]
+x.raw_counts=df.using[,1:ncol(df.raw_counts)]
+x.cluster_result=df.using[,(ncol(df.raw_counts)+1):ncol(df.using)]
+for (col in colnames(x.cluster_result)){
+  x.cluster_result[col]=as.factor(x.cluster_result[[col]])
+}
+str(x.cluster_result)
+
+class_label='nmf_2_clusters'
+group=factor(x.cluster_result[[class_label]])
+batch=factor(x.cluster_result[['batch']])
+```
+
+```{r}
+dge=DGEList(t(x.raw_counts),group=group)
+keep.exprs <- filterByExpr(dge)
+dge <- dge[keep.exprs, , keep.lib.sizes = FALSE]
+dge <- calcNormFactors(dge,method='TMM')
+dge
+
+```
+
+```{r}
+
+df.cpm=as.data.frame(t(cpm(dge)))
+df.lcpm=cpm(dge,log=TRUE)
+dim(cpm(dge))
+dim(dge)
+
+design <- model.matrix(~ batch + group)
+dge <- estimateDisp(dge, design)
+
+```
+
+```{r}
+# Test for DGE output
+df.cpm.test1=cpm(dge$counts)
+df.cpm.test2=df.cpm
+dim(df.cpm.test1)
+dim(df.cpm.test2)
+identical(df.cpm.test1,df.cpm.test2)
+as.data.frame(df.cpm.test1)
+as.data.frame(df.cpm.test2)
+
+```
+
+```{r}
+# Test Log Fold Change
+mean(as.numeric(dge$counts[which(dge$samples$group == 2)]))/
+mean(as.numeric(dge$counts[which(dge$samples$group == 1)]))
+log2(1.224168)
+df.normed=t(as.data.frame(dge$counts/dge$samples$norm.factors))
+df.cpm.normed=t(as.data.frame(df.cpm))
+mean(as.numeric(df.normed[which(dge$samples$group == 2),'ENSG00000000003']))/
+mean(as.numeric(df.normed[which(dge$samples$group == 1),'ENSG00000000003']))
+mean(as.numeric(df.cpm.normed[which(dge$samples$group == 2),'ENSG00000000003']))/
+mean(as.numeric(df.cpm.normed[which(dge$samples$group == 1),'ENSG00000000003']))
+log2(1.314362)
+df.lcpm.normed=t(as.data.frame(df.lcpm))
+mean(as.numeric(df.lcpm.normed[which(dge$samples$group == 2),'ENSG00000000003']))/
+mean(as.numeric(df.lcpm.normed[which(dge$samples$group == 1),'ENSG00000000003']))
+log2(1.201203)
+
+dim(df.normed)
+```
+
+### Delete Non-coding Genes
+
+```{r}
+keytypes(org.Hs.eg.db)
+all_genes=colnames(df.cpm)
+test = bitr(all_genes, #数据集
+  fromType="ENSEMBL", #输入为SYMBOL格式
+  toType="SYMBOL",  # 转为ENTERZID格式
+  OrgDb="org.Hs.eg.db") #人类 数据库
+head(test,2)
+dim(test)
+# Patterns to match
+patterns <- c('.+-P$', '.+-AS', '\\d{4,}', '^(MI|AC|LINC)', 'RNU-')
+
+# Check if column matches any patterns
+keep.symbols <- character()
+
+for (symbol in test[['SYMBOL']]) {
+  if (!any(sapply(patterns, function(p) str_detect(symbol, p)))) {
+    keep.symbols <- c(keep.symbols, test[test$SYMBOL==symbol,'ENSEMBL'])
+  }
+}
+length(keep.symbols)
+df.cpm.coding=df.cpm[,keep.symbols]
+dim(df.cpm.coding)
+```
+
+### Check Batch and Data
+
+```{r}
+df.raw=draw_df
+target_col='batch'
+using_num=ncol(df.cpm.coding)
+figure_title='edgeR'
+figure_save_path=''
+
+
+```
+
+```{r}
+v <- voom(dge, design)
+v_corrected=as.data.frame(t(v))
+str(v)
+
+df.counts.edge=as.data.frame(t(cpm(dge, normalized.lib.sizes = TRUE)))
+
+# Delete Batch Effect
+# v_corrected <- removeBatchEffect(v$E, batch = batch)
+# v_corrected=as.data.frame(t(v_corrected))
+
+```
+
+```{r}
+
+draw_df=merge(v_corrected,df.cluster_result[,'batch',drop=FALSE],by='row.names')
+rownames(draw_df)=draw_df[,1]
+draw_df=draw_df[,2:ncol(draw_df)]
+draw_df$batch=factor(draw_df$batch)
+draw_pca(draw_df,'batch',ncol(df.cpm.coding),'Limma','')
+draw_plsda(draw_df,'batch',ncol(df.cpm.coding),'Limma','')
+draw_df$batch
+
+type(draw_df$batch)
+```
+
+```{r}
+
+draw_df=merge(df.raw_counts[,intersect(colnames(df.raw_counts),colnames(df.cpm.coding))],df.cluster_result[,'batch',drop=FALSE],by='row.names')
+rownames(draw_df)=draw_df[,1]
+draw_df=draw_df[,2:ncol(draw_df)]
+draw_df$batch=factor(draw_df$batch)
+draw_pca(draw_df,'batch',ncol(draw_df)-1,'RAW','')
+draw_plsda(draw_df,'batch',ncol(draw_df)-1,'RAW','')
+draw_df$batch
+
+type(draw_df$batch)
+```
+
+### Save Data
+
+```{r}
+# write.csv(df.cpm.coding,"~/workstation/MetabSubtype/tasks/MultiOmics/data/rna/limma_cpm.csv",sep=',')
+# 
+# dim(df.cpm.coding)
+# test_df=read.csv("~/workstation/MetabSubtype/tasks/MultiOmics/data/rna/limma_cpm.csv",row.names = 1)
+# identical(df.cpm.coding,test_df)
+
+```
+
+## DE
+
+```{r}
+
+
+
+fit <- glmQLFit(dge, design)
+lrt <- glmLRT(fit, coef = 'group2')
+
+dim(topTags(lrt))
+
+lrt$table
+dim(lrt$table)
+```
+
+```{r}
+logfc_cutoff=1
+pvalue_cutoff=5e-2
+df.stat.edger=lrt$table
+df.sig.edger=df.stat.edger[(abs(df.stat.edger$logFC)>logfc_cutoff)&(df.stat.edger$PValue<pvalue_cutoff),]
+ensemble.sig.edger=rownames(df.sig.edger)
+length(ensemble.sig.edger)
+```
+
+```{r}
+for(gene_id in ensemble.sig.edger){
+  if(str_detect('.',gene_id)){
+    print(gene_id)
+  }
+}
+ensemble.sig.edger
+```
+
+### Test DE Result
+
+```{r}
+wilcox_foldchange <- function(data, group_labels) {
+  # Ensure the input is a data frame and group_labels is a factor
+  data <- as.data.frame(data)
+  group_labels <- as.factor(group_labels)
+  
+  # Initialize results data frame
+  results <- data.frame(
+    Feature = colnames(data),
+    FC = numeric(ncol(data)),
+    logFC = numeric(ncol(data)),
+    pvalue = numeric(ncol(data)),
+    FDR = numeric(ncol(data))
+  )
+  
+  # Loop through each feature (column)
+  for (i in seq_along(colnames(data))) {
+    feature <- data[, i]
+    
+    # Calculate fold change (FC)
+    group1_median <- mean(feature[group_labels == levels(group_labels)[2]])
+    group2_median <- mean(feature[group_labels == levels(group_labels)[1]])
+    FC <- group2_median / group1_median
+    logFC <- log2(FC)
+    
+    # Perform Wilcoxon rank-sum test
+    wilcox_test <- wilcox.test(feature ~ group_labels)
+    pvalue <- wilcox_test$p.value
+    
+    # Store the results
+    results[i, "FC"] <- FC
+    results[i, "logFC"] <- logFC
+    results[i, "pvalue"] <- pvalue
+  }
+  
+  # Adjust p-values for multiple testing (FDR)
+  results$FDR <- p.adjust(results$pvalue, method = "fdr")
+  
+  return(results)
+}
+
+
+```
+
+```{r}
+
+# df.result.test=wilcox_foldchange(v_corrected,group)
+df.result.test
+df.stat
+```
+
+### Heatmap
+
+```{r}
+v_corrected
+```
+
+```{r}
+# v_corrected=v_corrected+abs(min(v_corrected[v_corrected<=0]))+1
+# loaddata=merge(v_corrected,df.cluster_result,by="row.names")
+df.counts.edge=df.counts.edge+abs(min(df.counts.edge[df.counts.edge<=0]))+1
+loaddata=merge(log2(df.counts.edge),df.cluster_result,by="row.names")
+rownames(loaddata)=loaddata[,1]
+loaddata=loaddata[2:ncol(loaddata)]
+idx <- which(loaddata =='-Inf', arr.ind = TRUE)
+loaddata[idx]=0
+```
+
+```{r}
+class_label='batch'
+feature_cols=intersect(ensemble.sig,colnames(loaddata))
+draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE)
+print(length(feature_cols))
+```
+
+```{r}
+
+class_label='nmf_2_clusters'
+
+feature_cols=intersect(ensemble.sig.edger,colnames(loaddata))
+draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE)
+draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE,FALSE)
+```
+
+```{r}
+loaddata
+length(feature_cols)
+```
+
+# DESeq Process
+
+## Build Dataset
+
+```{r}
+
+
+# Create the DESeqDataSet object
+dds <- DESeqDataSetFromMatrix(countData = as.data.frame(t(x.raw_counts)), colData = x.cluster_result, design = ~ batch + nmf_2_clusters)
+nrow(df.cluster_result)
+# Filter lowly expressed genes
+smallestGroupSize=min(nrow(df.cluster_result[df.cluster_result$nmf_2_clusters==1,]),nrow(df.cluster_result[df.cluster_result$nmf_2_clusters==2,]))
+keep <- rowSums(counts(dds) >= 10) >= smallestGroupSize
+dds <- dds[keep,]
+nrow(dds)
+dds <- DESeq(dds)
+str(results(dds))
+
+```
+
+```{r}
+
+```
+
+## DE
+
+### Analysis
+
+```{r}
+df.stat.deseq <- as.data.frame(results(dds)@listData)
+rownames(df.stat.deseq)=rownames(dds)
+
+logfc_cutoff=log2(3)
+pvalue_cutoff=1e-2
+df.sig.deseq=df.stat.deseq[(abs(df.stat.deseq$log2FoldChange)>logfc_cutoff)&(df.stat.deseq$padj<pvalue_cutoff),]
+ensemble.sig.deseq=rownames(df.sig.deseq)
+length(ensemble.sig.deseq)
+
+class_label='nmf_2_clusters'
+feature_cols=intersect(ensemble.sig.deseq,colnames(loaddata))
+draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE)
+print(length(feature_cols))
+```
+
+### Comparison with EdgeR
+
+```{r}
+df.stat.deseq
+df.stat.edger
+length(ensemble.sig.edger)
+length(ensemble.sig.deseq)
+length(intersect(ensemble.sig.deseq,ensemble.sig.edger))
+```
+
+### Heatmap
+
+```{r}
+v_corrected.deseq=as.data.frame(t(assay(vst(dds,blind = FALSE))))
+v_corrected.deseq
+# v_corrected.deseq=v_corrected.deseq+abs(min(v_corrected[v_corrected.deseq<=0]))+1
+loaddata=merge(v_corrected.deseq,df.cluster_result,by="row.names")
+rownames(loaddata)=loaddata[,1]
+loaddata=loaddata[2:ncol(loaddata)]
+idx <- which(loaddata =='-Inf', arr.ind = TRUE)
+loaddata[idx]=0
+```
+
+```{r}
+class_label='batch'
+feature_cols=intersect(ensemble.sig,colnames(loaddata))
+draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE)
+print(length(feature_cols))
+```
+
+```{r}
+class_label='nmf_2_clusters'
+feature_cols=intersect(ensemble.sig,colnames(loaddata))
+draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE)
+draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE,FALSE)
+print(length(feature_cols))
+```
+
+### Save Data
+
+```{r}
+
+# Loged and Normed
+# write.csv(v_corrected.deseq,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240522_deseq/matrix.csv")
+# write.csv(df.stat.deseq,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240522_deseq/stat.csv")
+
+```
+
+## KEGG
+
+### Load Data
+
+```{r}
+df.test=merge(v_corrected.deseq,df.cluster_result,by='row.names')
+df.test %>%
+  group_by(nmf_2_clusters) %>%
+  summarise(ENSG00000000003=mean(ENSG00000000003))
+```
+
+```{r}
+df.test.results=read.csv("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240522_deseq/stat.csv",row.names = 1)
+df.test.results
+```
+
+```{r}
+
+logfc_cutoff=log2(2)
+pvalue_cutoff=1e-2
+df.test.results$is_use=(df.test.results$padj<=pvalue_cutoff)&(abs(df.test.results$log2FoldChange)>=logfc_cutoff)
+ensemble.sig=rownames(df.test.results[df.test.results$is_use,])
+length(ensemble.sig)
+
+df.test.results.up=df.test.results[df.test.results$log2FoldChange>0,]
+df.test.results.down=df.test.results[df.test.results$log2FoldChange<0,]
+
+dim(df.test.results.up)
+dim(df.test.results.down)
+```
+
+### UP
+
+```{r}
+
+used_ens_ids=rownames(df.test.results.up[df.test.results.up$is_use,])
+
+print(paste0('used metab number is ',length(used_ens_ids)))
+columns(org.Hs.eg.db)
+
+used_entrz_ids=mapIds(org.Hs.eg.db,keys=used_ens_ids,keytype="ENSEMBL",column="ENTREZID")
+kegg_result=enrichKEGG(
+  used_entrz_ids,
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  use_internal_data = FALSE
+)
+kegg_table <- na.omit(as.data.frame(kegg_result))
+
+kegg_table$FoldEnrich <- apply(kegg_table, 1, 
+                               function(x) as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[1])/
+                                 as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+
+# Generate Draw Table
+kegg_table_draw=kegg_table
+unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
+kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+
+pathway_names=unique(kegg_table_draw$Description)
+
+kegg_table_draw
+
+# Figure using FDR as X
+kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
+kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-min((nrow(kegg_table_draw)-1),15)):nrow(kegg_table_draw),]
+dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
+# write.csv(kegg_table.mt2,paste0(dirpath,'counts_pathway_up.csv',collapse = '/'))
+
+kegg_table_draw$FDR
+kegg_table_draw$FoldEnrich
+p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(3, 15), breaks = c(seq(1,3,0.2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(2,8,2)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "RNA Upregulated", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+# pdf(paste(dirpath,'rna_counts_up.pdf',sep = ''),12,7)
+print(p)
+```
+
+### DOWN
+
+```{r fig.height=6, fig.width=12}
+used_ens_ids=rownames(df.test.results.down[df.test.results.down$is_use,])
+
+print(paste0('used metab number is ',length(used_ens_ids)))
+columns(org.Hs.eg.db)
+#used_entrz_ids=c()
+used_entrz_ids=mapIds(org.Hs.eg.db,keys=used_ens_ids,keytype="ENSEMBL",column="ENTREZID")
+
+
+kegg_result=enrichKEGG(
+  used_entrz_ids,
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  use_internal_data = FALSE
+)
+kegg_table <- na.omit(as.data.frame(kegg_result))
+kegg_table <- kegg_table[kegg_table$Count > 2,]
+
+# kegg_table$metabs_mean <- apply(kegg_table, 1, path_avelog2FC,df.test.results=df.test.results)
+# calculate fold enrichment
+kegg_table[1:5,3:8]
+dim(kegg_table)
+kegg_table$FoldEnrich <- apply(kegg_table, 1, 
+                               function(x) as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[1])/
+                                 as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+
+# Generate Draw Table
+kegg_table_draw=kegg_table
+unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
+kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+
+pathway_names=unique(kegg_table_draw$Description)
+
+kegg_table_draw
+
+# Figure using FDR as X
+kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
+kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-10):nrow(kegg_table_draw),]
+dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
+# write.csv(kegg_table.mt2,paste0(dirpath,'counts_pathway_down.csv',collapse = '/'))
+
+kegg_table_draw$FDR
+kegg_table_draw$FoldEnrich
+p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(3, 15), breaks = c(seq(1,3,0.2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(10,17,2)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "RNA Downregulated", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+# pdf(paste(dirpath,'rna_counts_up.pdf',sep = ''),12,7)
+print(p)
+
+
+```
+
+# KEGG
+
+## Load Data
 
 ## Statistics before KEGG
 
@@ -170,7 +741,7 @@ apply(df.test[,1:metab_num], 2,
 ### Read Data
 
 ```{r}
-filepath.stat.counts='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240515/rna_stat.csv'
+filepath.stat.counts='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240518_combat_deseq/rna_nmf_stat.csv'
 df.test.results<-read.csv(filepath.stat.counts, header= TRUE, check.names=F,row.names=1)
 # if(ncol(df.test.results)>4){
 #   df.test.results=df.test.results[2:5]
@@ -180,7 +751,6 @@ df.test.results
 ```
 
 ```{r}
-rownames(df.test.results)=df.test.results[,1]
 
 df.test %>%
   group_by(nmf_2_clusters) %>%
@@ -235,7 +805,7 @@ kegg_result=enrichKEGG(
 )
 kegg_table <- na.omit(as.data.frame(kegg_result))
 
-kegg_table <- kegg_table[kegg_table$Count > 2,]
+# kegg_table <- kegg_table[kegg_table$Count > 2,]
 
 # kegg_table$metabs_mean <- apply(kegg_table, 1, path_avelog2FC,df.test.results=df.test.results)
 # calculate fold enrichment
@@ -365,13 +935,46 @@ print(p)
 ```{r}
 
 df.sample
-
 ```
 
 # Plot
 
-## Heatmap 
+## Heatmap
 
 ```{r}
+class_label='nmf_2_clusters'
+sig_cols=rownames(df.test.results[df.test.results$is_use=='TRUE',])
+loaddata=merge(log2(df.rna_counts),df.cluster_result[,class_label,drop=FALSE],by="row.names")
+rownames(loaddata)=loaddata[,1]
+loaddata=loaddata[2:ncol(loaddata)]
+idx <- which(loaddata =='-Inf', arr.ind = TRUE)
+loaddata[idx]=0
+feature_cols=intersect(sig_cols,colnames(loaddata))
+draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE)
+```
+
+## Survival
+
+```{r fig.height=6, fig.width=10}
+
+time_label_col='os'
+event_label_col=paste0(time_label_col,'s')
+##### Survival #####
+df.use.os=merge(df.cluster_result,df.sample[,c(time_label_col,event_label_col)],by='row.names')
+df.use.os=df.use.os[order(df.use.os[[time_label_col]]),,drop=FALSE]
+
+surv_object=Surv(df.use.os[[time_label_col]],df.use.os[[event_label_col]])
+
+# K-MEANS
+kmeans_fit=survfit(surv_object~kmeans_2_clusters,data=df.use.os)
+kmeans_plot=ggsurvplot(kmeans_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
+# NMF
+nmf_fit=survfit(surv_object~nmf_2_clusters,data=df.use.os)
+nmf_plot=ggsurvplot(nmf_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
+# nmf_plot
+# Combine
+arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,pval = TRUE,title=toupper(time_label_col))
 
 ```
+
+## 

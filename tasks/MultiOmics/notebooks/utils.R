@@ -405,6 +405,9 @@ draw_heatmap<-function(loaddata,feature_cols,class_label,ha_col,use_row_ha=FALSE
     col_fun<-colorRamp2(
         bk,
         c("#1D91C0", "white", "#E31A1C"))
+    if(col_split==F){
+      col_ha=NULL
+    }
     if(use_row_ha){
         row_ha=data.frame(lipid=feature_cols)
         row_ha$headgroup=str_extract(feature_cols,'([A-Z]*[a-z]*)*')
