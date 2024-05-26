@@ -408,6 +408,7 @@ draw_heatmap<-function(loaddata,feature_cols,class_label,ha_col,use_row_ha=FALSE
     if(col_split==F){
       col_ha=NULL
     }
+    print(col_ha)
     if(use_row_ha){
         row_ha=data.frame(lipid=feature_cols)
         row_ha$headgroup=str_extract(feature_cols,'([A-Z]*[a-z]*)*')
@@ -496,6 +497,7 @@ draw_single_heatmap<-function(df.raw,feature_num,class_label,pvalue_cutoff=0.05,
     )
     # print(q)
     print('finished')
+    return(p)
 }
 
 ##### KEGG #####
@@ -521,8 +523,8 @@ kegg_before_process<-function(df.test,metab_num,class_label,types=c()){
     df.test.results$wilcox_BH=p.adjust(df.test.results$wilcox,method="BH")
     df.test.results$FC <- apply(df.test[,1:metab_num], 2, 
                                 function(x) 
-                                mean(as.numeric(x[which(df.test[class_label] == types[1])]))/
-                                mean(as.numeric(x[which(df.test[class_label] == types[2])])))
+                                mean(as.numeric(x[which(df.test[class_label] == types[2])]))/
+                                mean(as.numeric(x[which(df.test[class_label] == types[1])])))
     df.test.results$log2FC<- log2(df.test.results$FC)
     return(df.test.results)
 }
