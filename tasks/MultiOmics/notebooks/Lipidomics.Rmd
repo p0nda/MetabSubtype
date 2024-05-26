@@ -19,6 +19,7 @@ library(KEGGREST)
 library(viridis)
 library(survminer)
 library(survival)
+library(gridExtra)
 
 
 getwd()

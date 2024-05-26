@@ -1,0 +1,12 @@
+# 20240401
+'D:/repositories/liver-cancer/tasks/Tissue/data/20240401/metab.csv' - update
+'D:/repositories/liver-cancer/tasks/Tissue/data/20240401/lipid.csv' - update
+'D:/repositories/liver-cancer/tasks/Tissue/data/Sample/sample_20240131.csv' 
+# 20240131 
+'D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/metab.csv'
+'D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/lipid.csv'
+'D:/repositories/liver-cancer/tasks/Tissue/data/Sample/sample_20240131.csv' - update
+# 20231202
+'D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/metab.csv'
+'D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/lipid.csv'
+'D:/repositories/liver-cancer/tasks/Tissue/data/20231202_batch_sum/new_sample.csv'

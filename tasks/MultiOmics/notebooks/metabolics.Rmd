@@ -1,0 +1,638 @@
+```{r}
+library(NMF)
+library(stringr)
+# library(eoffice)
+library(dplyr)
+library(ComplexHeatmap)
+library(ggplot2)
+# library(rJava)
+# library(xlsx)
+# library(RColorBrewer)
+library(circlize)
+library(umap)
+library(Rtsne)
+library(ggrepel)
+library(ggplot2)
+library(clusterProfiler)
+library(KEGGREST)
+# library(ConsensusClusterPlus)
+library(viridis)
+library(survminer)
+library(survival)
+
+
+getwd()
+setwd("~/workstation/MetabSubtype/tasks/Subtype/notebooks/")
+source('utils.R')
+
+```
+
+```{r}
+##### Metab #####
+LABEL_NUM=0
+filepath.metab='~/workstation/MetabSubtype/tasks/Subtype/data/Using/metab.csv'
+filepath.sample='~/workstation/MetabSubtype/tasks/Subtype/data/Using/sample.csv'
+
+filepath.cluster_result='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/metab/cluster_result.csv'
+df.cluster_result<-read.csv(filepath.cluster_result, header= TRUE, check.names=F,row.names=1)
+df.metab<-read.csv(filepath.metab, header= TRUE, check.names=F,row.names=1)
+df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
+df.metab[1:5,1:5]
+dim(df.metab)
+length(unique((df.metab[,1])))
+unique(df.metab[,1])
+df.metab[,1]
+df.metab[df.metab=='']=NA
+df.sample[df.sample=='']=NA
+df.sample[df.sample=='Neg']=NA
+# df.sample=df.sample[!is.na(df.sample['Sample Name']),c('Sample Name','主要分型','生存时间分组','MT2结构')]
+df.sample=df.sample[!is.na(df.sample['Sample Name']),]
+df.sample['Sample Name']
+row.names(df.sample)=df.sample[['Sample Name']]
+df.sample=df.sample[rownames(df.metab),]
+df.sample[match('1520',rownames(df.sample)),'oss']=0
+dim(df.metab)
+metab_num=ncol(df.metab)
+df.raw_metab=df.metab[,1:metab_num]
+dim(df.sample)
+dim(merge(df.metab,df.sample,by.x="row.names",by.y="Sample Name"))
+
+
+# Normalize Data
+df.raw_metab.log=log2(df.raw_metab)
+df.raw_metab.scaled=df.raw_metab.log
+raw_metab_mean=apply(df.raw_metab.log,1,mean)
+raw_metab_std=apply(df.raw_metab.log,1,sd)
+df.raw_metab.scaled=(df.raw_metab.scaled-raw_metab_mean)/raw_metab_std
+df.raw_metab.scaled=as.data.frame(nneg(as.matrix(df.raw_metab.scaled),method='min'))
+colnames(df.raw_metab.scaled)
+dim(df.raw_metab.scaled)
+```
+
+```{r}
+
+df.name_map=read.csv("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_name_map.csv", header= TRUE, check.names=F)
+df.path.metab <- read.csv('/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_hsa_pathway_map.csv', header = T)
+df.path.metab=df.path.metab[1:3206,]
+df.path.metab=df.path.metab[!(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
+# df.path.metab[(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
+df.path.metab$pathway_name=str_replace(df.path.metab$pathway_name,' - Homo sapiens \\(human\\)','')
+dim(df.path.metab)
+dim(df.name_map)
+df.new=df.path.metab[df.path.metab$cpd_id %in% df.name_map$KEGG,]
+df.new$query=NA
+df.new$query=df.name_map$compound[match(df.new$cpd_id, df.name_map$KEGG)]
+df.new[df.new=='']=NA
+head(df.new)
+df.new$pathway_id=as.character(df.new$pathway_id)
+df.new$cpd_id=as.character(df.new$cpd_id)
+df.new$query=as.character(df.new$query)
+str(df.new)
+
+for (col in colnames(df.cluster_result)){
+  df.cluster_result[col]=as.factor(df.cluster_result[[col]])
+}
+```
+
+```{r}
+
+df.use=merge(df.raw_metab.scaled,df.cluster_result,by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+dim(df.use)
+p_cutoff=5e-2
+
+df.use=df.use[order(df.use[[class_label]]),]
+df.use[class_label]
+draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',p_cutoff,FALSE )
+# draw_single_heatmap(df.use,metab_num,'nmf_2_clusters',p_cutoff,FALSE )
+```
+
+# KEGG
+
+```{r}
+
+dim(df.path.metab)
+dim(df.name_map)
+df.new=df.path.metab[df.path.metab$cpd_id %in% df.name_map$KEGG,]
+df.new$query=NA
+df.new$query=df.name_map$compound[match(df.new$cpd_id, df.name_map$KEGG)]
+df.new[df.new=='']=NA
+head(df.new)
+# colnames(df.name_map)
+colnames(df.sample)
+# Relabel Codex
+class_label="kmeans_2_clusters"
+df.use_sample=df.cluster_result
+df.use_sample=df.use_sample[!is.na(df.use_sample[class_label]),]
+# df.use_sample=df.use_sample[df.use_sample[['CODEX主要亚型']] %in% c('A'),]
+# type1='high'
+# type2=setdiff(unique(df.use_sample[[class_label]]),type1)
+df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+pvalue_cutoff=5e-2
+fc_up_cutoff=1.2
+fc_down_cutoff=1.2
+df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('1','2'))
+
+kegg_table=kegg_after_process(df.test.results.mt2,pvalue_cutoff,fc_up_cutoff,fc_down_cutoff)
+kegg_table
+
+# Draw Table
+kegg_table_draw=kegg_table
+
+unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
+kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+
+pathway_names=unique(kegg_table_draw$Description)
+
+kegg_table_draw[kegg_table_draw['FDR']<=5e-2,c('Description','pvalue','query')]
+kegg_table_draw
+
+# Figure using FDR as X
+kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
+kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-10):nrow(kegg_table_draw),]
+# dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
+# write.csv(kegg_table,paste0(dirpath,'metab_pathway.csv',collapse = '/'))
+
+kegg_table_draw$FDR
+p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(3, 15), breaks = c(seq(0,10,2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(1,3,0.5)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+print(p)
+
+```
+
+# Mean Aggregate
+
+```{r}
+test_df=merge(df.raw_metab,df.cluster_result,by="row.names")
+rownames(test_df)=test_df[,1]
+test_df['kmeans_2_clusters']
+ggplot(data=test_df,aes(x=kmeans_2_clusters,y=amp))+geom_boxplot()+geom_jitter()
+```
+
+```{r}
+df.raw_metab
+pathway_matrix[,c('kmeans_2_clusters','amp')]
+```
+
+```{r}
+
+##### Mean Aggregate #####  
+dirpath="~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/Metab/Mean/"
+# setwd(dirpath)
+class_label='kmeans_2_clusters'
+df.use_sample=df.sample
+df.use=merge(df.raw_metab,df.cluster_result[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+pathway_matrix=df.use %>% group_by(!!sym(class_label)) %>% summarise_all(mean)
+dim(pathway_matrix)
+colnames(pathway_matrix)
+# Row Name Specified
+df.pathway_fc=as.data.frame(pathway_matrix)
+row.names(df.pathway_fc)=df.pathway_fc[[1]]
+df.pathway_fc=df.pathway_fc[,2:ncol(df.pathway_fc)]
+df.pathway_fc['fc',]=df.pathway_fc['2',]/df.pathway_fc['1',]
+df.pathway_fc=t(df.pathway_fc)
+df.pathway_fc=as.data.frame(df.pathway_fc)
+df.pathway_fc
+colnames(df.pathway_fc)
+df.pathway_fc[['fc']]
+df.pathway_fc['log2fc']=sapply(df.pathway_fc[['fc']],log2)
+pvalue.mt2_pathway=pvalue_by_wilcox(df.use,metab_num,class_label)
+pvalue.mt2_pathway
+match(pvalue.mt2_pathway[['Metabolites']],rownames(df.pathway_fc))
+df.pathway_fc$pvalue=pvalue.mt2_pathway[match(pvalue.mt2_pathway[['Metabolites']],rownames(df.pathway_fc)),'pvalue']
+df.pathway_fc['kynurenine',]
+
+pvalue_cutoff=1
+use_row_ha=FALSE
+col_split=TRUE
+pathway_names=unique(kegg_table$Description)
+for (pathway_name in pathway_names){
+  # Get Pathway CPDs
+  metabs.kegg.tca=df.new[df.new$pathway_name==pathway_name,'query']
+  metabs.kegg.tca
+  metabs.ms.tca=get_ms_metabs(metabs.kegg.tca)
+  
+  metabs.ms.tca
+  metabs.ms.tca=metabs.ms.tca[metabs.ms.tca!='NA']
+  mat=as.matrix(df.pathway_fc[,'log2fc'])
+  mat=as.matrix(df.pathway_fc[metabs.ms.tca,'log2fc',drop=FALSE])
+  mat=mat[order(mat),,drop=FALSE]
+  bk=c(-1,0,1)
+  col_fun<-colorRamp2(
+    bk,
+    c("#1D91C0", "white", "#E31A1C"))
+  p=ComplexHeatmap::pheatmap(mat,
+                           name = pathway_name,
+                           cluster_cols = F,
+                           cluster_rows = F,
+                           cellheight = 25,
+                           cellwidth = 40,
+                           col = col_fun
+                           # scale="col"
+                           
+  )
+  # print(p)
+  # Sys.sleep(3)
+  pathway_name=str_replace_all(pathway_name,'/','_')
+  pathway_name=str_replace_all(pathway_name,',','_')
+  pathway_name=str_replace_all(pathway_name,'\\(','_')
+  pathway_name=str_replace_all(pathway_name,'\\)','_')
+  filepath=paste(dirpath,pathway_name,'.pdf',sep='')
+  filepath=str_replace_all(filepath,'  ',' ')
+  pdf(filepath)
+  draw(p)
+  dev.off()
+
+}
+
+```
+
+```{r}
+pathway_name='Purine metabolism'
+  # Get Pathway CPDs
+metabs.kegg.tca=df.new[df.new$pathway_name==pathway_name,'query']
+metabs.kegg.tca
+metabs.ms.tca=get_ms_metabs(metabs.kegg.tca)
+
+metabs.ms.tca
+metabs.ms.tca=metabs.ms.tca[metabs.ms.tca!='NA']
+mat=as.matrix(df.pathway_fc[,'log2fc'])
+mat=as.matrix(df.pathway_fc[metabs.ms.tca,'log2fc',drop=FALSE])
+mat=mat[order(mat),,drop=FALSE]
+bk=c(-1,0,1)
+col_fun<-colorRamp2(
+  bk,
+  c("#1D91C0", "white", "#E31A1C"))
+p=ComplexHeatmap::pheatmap(mat,
+                         name = pathway_name,
+                         cluster_cols = F,
+                         cluster_rows = F,
+                         cellheight = 25,
+                         cellwidth = 40,
+                         col = col_fun
+                         # scale="col"
+                         
+)
+print(p)
+```
+
+# PCA
+
+```{r}
+
+```
+
+# Volcano
+
+```{r}
+
+
+class_label='kmeans_2_clusters'
+df.use_sample=df.sample
+df.use=merge(df.raw_metab,df.cluster_result[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+volcano.test.results=pvalue_by_wilcox(df.use,metab_num,class_label)
+
+type1='1'
+type2='2'
+volcano.test.results$FC=apply(df.use[,1:metab_num], 2, 
+                          function(x) 
+                            mean(as.numeric(x[which(df.use[class_label] == type2)]))/
+                            mean(as.numeric(x[which(df.use[class_label] == type1)])))
+head(volcano.test.results)
+# Log2 (FC)
+volcano.test.results$log2FC <- log2(volcano.test.results[,'FC'])
+
+dim(volcano.test.results[volcano.test.results$pvalue<5e-2,])
+dim(volcano.test.results[(volcano.test.results$pvalue<5e-2)&(abs(volcano.test.results$log2FC)>log2(1.4)),])
+##标记上调下调
+pvalue_cutoff=5e-2
+fc_up_cutoff=1.2
+fc_down_cutoff=1/fc_up_cutoff
+
+draw_volcano(volcano.test.results,pvalue_cutoff,fc_up_cutoff)
+
+```
+
+# CPD Line
+
+```{r}
+dirpath="~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/Metab/Pathway_Draw/"
+df.cpd_kegg=kegg_table_draw
+
+fig_num=nrow(df.cpd_kegg)
+ps=list()
+for (fig_num in c(1:nrow(df.cpd_kegg))){
+    pathway_name=df.cpd_kegg[['Description']][fig_num]
+    print(pathway_name)
+    queries=unlist(strsplit(df.cpd_kegg[which(df.cpd_kegg[['Description']]==pathway_name),'query'],'/'))
+    queries=unname(unlist(sapply(queries,function(search_metabolite){(colnames(df.raw_metab)[grep(search_metabolite,colnames(df.raw_metab),ignore.case = TRUE)][1])})))
+    queries=queries[!is.na(queries)]
+    print(queries)
+    # # Try to norm in loop
+    # 
+    # df.metab.scaled=df.metab.log
+    # df.metab.scaled=df.metab.scaled[,queries,drop=FALSE]
+    # metab_mean=apply(df.metab.log,1,mean)
+    # metab_mean
+    # length(metab_mean)
+    # metab_std=apply(df.metab.log,1,sd)
+    # df.metab.scaled=(df.metab.scaled-metab_mean)/metab_std
+    # 
+    # df.use_sample=df.sample
+    # df.use=merge(df.metab.scaled,df.use_sample[,class_label,drop=FALSE],by="row.names")
+    # row.names(df.use)=df.use[[1]]
+    # df.use=df.use[,2:ncol(df.use)]
+    # df.use=df.use[!is.na(df.use[class_label]),]
+    # #
+    # Build
+    df.use_sample=df.cluster_result
+    df.use=merge(df.raw_metab.scaled,df.use_sample[,class_label,drop=FALSE],by="row.names")
+    row.names(df.use)=df.use[[1]]
+    df.use=df.use[,2:ncol(df.use)]
+    df.use=df.use[!is.na(df.use[class_label]),]
+    
+    df.draw=data.frame(matrix(nrow = 0,ncol=4))
+    colnames(df.draw)=c('Metabolite','k_cluster_3','mean','sem')
+    for (row_index in c(1:length(queries))){
+      metabolite=queries[row_index]
+      # print(metabolite)
+      tmp_means=tapply(df.use[[metabolite]], df.use[[class_label]], mean)
+      # tmp_sds=tapply(df.use[[metabolite]], df.use[[class_label]], sd)
+      tmp_sems=tapply(df.use[[metabolite]], df.use[[class_label]], get_sem)
+      
+      for (i in c(1:2)){
+        # print(i)
+        tmp_name=names(tmp_means)[i]
+        df.draw[nrow(df.draw)+1,]=c(metabolite,tmp_name,as.numeric(tmp_means[[tmp_name]]),as.numeric(tmp_sems[[tmp_name]]))
+      }
+    }
+    df.draw[,2:4]=lapply(df.draw[,2:4],smartConvert)
+    df.draw
+    # color_palette <- brewesr.pal(n = 20, name = "Set2") 
+    color_palette
+    blank_margin=0.02
+    ylim_down=min(df.draw$mean)-max(df.draw$sem)-blank_margin
+    ylim_up=max(df.draw$mean)+max(df.draw$sem)+blank_margin
+    p=ggplot(data=df.draw,aes(x = k_cluster_3, y = mean, colour = Metabolite,group=Metabolite),
+             position=position_dodge(0.05))+
+      geom_point(aes(fill=Metabolite),size=3,pch=16,position=position_dodge(0.05))+
+      geom_line(size=1.1,position=position_dodge(0.05))+
+      geom_errorbar(aes(ymin=mean-sem, ymax=mean+sem,colour = Metabolite,group=Metabolite), width=.2,size=1.1,
+                    position=position_dodge(0.05))+
+  scale_x_discrete(labels=c('1','2'),breaks=waiver())+
+      ylim(ylim_down,ylim_up)+
+      theme_bw() +
+      labs(x='',y='Normalized')+
+      ggtitle(str_wrap(pathway_name,width = 30))+
+      theme(plot.title = element_text(hjust = 0.5,size=17), legend.position = "right")+
+      ##固定长宽比例不随着改变而改变
+      theme(plot.margin = margin(0.2, 0.2, 0.2, 0.2, "cm"), aspect.ratio = 1, panel.grid = element_blank())+
+      ##固定字体大小  
+      theme(axis.title.x = element_text(size = 16, hjust = 0.5, face = "plain"),
+            axis.title.y = element_text(size = 16, face = "plain"), 
+            axis.text.y = element_text(size = 15, face = "plain", colour = "black"),
+            axis.text.x = element_text(size = 15, face = "plain", colour = "black")) +
+      ##调整legend字体  
+      theme(legend.text = element_text(size = 15), 
+            legend.title = element_text(size = 15), 
+            legend.spacing.y = unit(0.2, 'cm'), 
+            legend.key.height = unit(0.3, 'cm'), legend.key.width = unit(0.3, 'cm')) 
+      # theme(panel.border = element_rect(size=2))
+    ps[[fig_num]]=p
+    print(p)
+    # Sys.sleep(10)
+    pathway_name=str_replace_all(pathway_name,'/','_')
+    pathway_name=str_replace_all(pathway_name,',','_')
+    filepath.cpd_fig=paste(dirpath,pathway_name,'.pdf',sep='')
+    filepath.cpd_fig=str_replace_all(filepath.cpd_fig,' ','_')
+    
+    pdf(filepath.cpd_fig)
+    print(p)
+    dev.off()
+    
+}
+res<-wrap_plots(ps,nrow=4,guides='keep')
+pdf(paste0(dirpath,'/all_in_one.pdf'),25,25)
+print(res)
+dev.off()
+res
+```
+
+## Specific
+
+```{r}
+class_label='kmeans_2_clusters'
+pathway_name="Purine metabolism"
+queries=unlist(strsplit(df.cpd_kegg[which(df.cpd_kegg[['Description']]==pathway_name),'query'],'/'))
+queries=unname(unlist(sapply(queries,function(search_metabolite){(colnames(df.raw_metab)[grep(search_metabolite,colnames(df.raw_metab),ignore.case = TRUE)][1])})))
+queries=queries[!is.na(queries)]
+print(queries)
+# # Try to norm in loop
+# 
+df.metab.scaled=df.raw_metab.log
+df.metab.scaled=df.metab.scaled[,queries,drop=FALSE]
+metab_mean=apply(df.raw_metab.log,1,mean)
+metab_mean
+length(metab_mean)
+metab_std=apply(df.raw_metab.log,1,sd)
+df.metab.scaled=(df.metab.scaled-metab_mean)/metab_std
+
+df.use_sample=df.cluster_result
+df.use=merge(df.metab.scaled,df.use_sample[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+df.use=df.use[!is.na(df.use[class_label]),]
+#
+
+# Build
+# df.use_sample=df.cluster_result
+# df.use=merge(df.raw_metab.log,df.use_sample[,class_label,drop=FALSE],by="row.names")
+# row.names(df.use)=df.use[[1]]
+# df.use=df.use[,2:ncol(df.use)]
+# df.use=df.use[!is.na(df.use[class_label]),]
+
+df.draw=data.frame(matrix(nrow = 0,ncol=4))
+colnames(df.draw)=c('Metabolite','k_cluster_3','mean','sem')
+for (row_index in c(1:length(queries))){
+  metabolite=queries[row_index]
+  # print(metabolite)
+  tmp_means=tapply(df.use[[metabolite]], df.use[[class_label]], mean)
+  # tmp_sds=tapply(df.use[[metabolite]], df.use[[class_label]], sd)
+  tmp_sems=tapply(df.use[[metabolite]], df.use[[class_label]], get_sem)
+  
+  for (i in c(1:2)){
+    # print(i)
+    tmp_name=names(tmp_means)[i]
+    df.draw[nrow(df.draw)+1,]=c(metabolite,tmp_name,as.numeric(tmp_means[[tmp_name]]),as.numeric(tmp_sems[[tmp_name]]))
+  }
+}
+df.draw[,2:4]=lapply(df.draw[,2:4],smartConvert)
+df.draw
+# color_palette <- brewesr.pal(n = 20, name = "Set2") 
+color_palette
+blank_margin=0.02
+ylim_down=min(df.draw$mean)-max(df.draw$sem)-blank_margin
+ylim_up=max(df.draw$mean)+max(df.draw$sem)+blank_margin
+p=ggplot(data=df.draw,aes(x = k_cluster_3, y = mean, colour = Metabolite,group=Metabolite),
+         position=position_dodge(0.05))+
+  geom_point(aes(fill=Metabolite),size=3,pch=16,position=position_dodge(0.05))+
+  geom_line(size=1.1,position=position_dodge(0.05))+
+  geom_errorbar(aes(ymin=mean-sem, ymax=mean+sem,colour = Metabolite,group=Metabolite), width=.2,size=1.1,
+                position=position_dodge(0.05))+
+  scale_x_discrete(labels=c('1','2'),breaks=waiver())+
+  ylim(ylim_down,ylim_up)+
+  theme_bw() +
+  labs(x='',y='Normalized')+
+  ggtitle(str_wrap(pathway_name,width = 30))+
+  theme(plot.title = element_text(hjust = 0.5,size=17), legend.position = "right")+
+  ##固定长宽比例不随着改变而改变
+  theme(plot.margin = margin(0.2, 0.2, 0.2, 0.2, "cm"), aspect.ratio = 1, panel.grid = element_blank())+
+  ##固定字体大小  
+  theme(axis.title.x = element_text(size = 16, hjust = 0.5, face = "plain"),
+        axis.title.y = element_text(size = 16, face = "plain"), 
+        axis.text.y = element_text(size = 15, face = "plain", colour = "black"),
+        axis.text.x = element_text(size = 15, face = "plain", colour = "black")) +
+  ##调整legend字体  
+  theme(legend.text = element_text(size = 15), 
+        legend.title = element_text(size = 15), 
+        legend.spacing.y = unit(0.2, 'cm'), 
+        legend.key.height = unit(0.3, 'cm'), legend.key.width = unit(0.3, 'cm')) 
+p
+```
+
+# TSNE Umap
+
+```{r}
+candidate_colors <- c("#8ea3c2",  "#FEA3A2","#f1df82", "#8ccdbf","#39d68f","#edb17f",  "#8E8BFE")
+
+
+df_draw=data.frame(tsne_coords[, 1], tsne_coords[, 2])
+colnames(df.draw)=c('tsne_V1','tsne_V2')
+df.draw['umap_V1']=umap_coords[, 1]
+df.draw['umap_V2']=umap_coords[, 2]
+write.csv(df.draw,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/metab_tsne_umap.csv")
+```
+
+## TSNE
+
+```{r}
+
+
+# TSNE
+
+class_label='kmeans_2_clusters'
+X=normalize_input(data.matrix(df.raw_metab.scaled[match(rownames(df.cluster_result),rownames(df.raw_metab.scaled)),]))
+tsne_results <- Rtsne(X, dims = 2,perplexity=20)
+tsne_coords <- tsne_results$Y
+df.draw=data.frame(tsne_coords[, 1], tsne_coords[, 2])
+colnames(df.draw)=c('V1','V2')
+rownames(df.draw)=rownames(df.cluster_result)
+df.draw=merge(df.draw,df.cluster_result,by.x = "row.names",by.y = "row.names")
+row.names(df.draw)=df.draw[[1]]
+df.draw=df.draw[,2:ncol(df.draw)]
+df.draw=merge(df.draw,df.sample[,c('os','oss')],by.x = "row.names",by.y = "row.names")
+row.names(df.draw)=df.draw[[1]]
+df.draw=df.draw[,2:ncol(df.draw)]
+
+df.draw
+
+color_palette=candidate_colors
+# Without Colored OS
+ggplot((data = df.draw), aes(x = V1, y = V2, color = factor(!!sym(class_label)))) +
+    geom_point(size=2) +
+    scale_color_manual(values = color_palette)+
+    # scale_color_gradient2(low = "red", mid = "white", high = "blue")+
+    labs(title = "t-SNE Visualization with Cluster Colors", x = "t-SNE Dimension 1", y = "t-SNE Dimension 2",fill='cluster') +
+    theme_bw()
+
+
+```
+
+### OS Colored
+
+```{r}
+
+ggplot((data = df.draw), aes(x = V1, y = V2, shape = factor(!!sym(class_label)),color=os )) +
+    geom_point() +
+    # scale_color_manual(values = color_palette(n = 3))+
+    scale_color_gradient(low = "red", mid = "white", high = "blue")+
+    labs(title = "t-SNE Visualization with Cluster Colors", x = "t-SNE Dimension 1", y = "t-SNE Dimension 2",fill='cluster') +
+    theme_bw()
+
+
+```
+
+## Umap
+
+```{r}
+
+# UMAP
+X=normalize_input(data.matrix(df.raw_metab.scaled))
+X=data.matrix(df.raw_metab.scaled)
+umap_results <- umap(X, n_components = 2)
+umap_results
+umap_coords <- umap_results$layout
+umap_coords
+class_label='kmeans_2_clusters'
+df.draw=data.frame(umap_coords[, 1], umap_coords[, 2])
+colnames(df.draw)=c('V1','V2')
+rownames(df.draw)=rownames(df.cluster_result)
+df.draw=merge(df.draw,df.cluster_result,by.x = "row.names",by.y = "row.names")
+row.names(df.draw)=df.draw[[1]]
+df.draw=df.draw[,2:ncol(df.draw)]
+
+ggplot((data = df.draw), aes(x = V1, y = V2, color = factor(!!sym(class_label)) )) +
+    geom_point() +
+    #scale_color_manual(values = color_palette)+
+    scale_color_brewer(palette="Set1")+
+    labs(title = "Umap Visualization with Cluster Colors", x = "Umap Dimension 1", y = "Umap Dimension 2",fill='cluster') +
+    theme_bw()
+
+```
+
+# Survival
+
+```{r fig.height=6, fig.width=5}
+
+time_label_col='os'
+event_label_col=paste0(time_label_col,'s')
+##### Survival #####
+df.use.os=merge(df.cluster_result,df.sample[,c(time_label_col,event_label_col)],by='row.names')
+df.use.os=df.use.os[order(df.use.os[[time_label_col]]),,drop=FALSE]
+
+surv_object=Surv(df.use.os[[time_label_col]],df.use.os[[event_label_col]])
+
+# K-MEANS
+kmeans_fit=survfit(surv_object~kmeans_2_clusters,data=df.use.os)
+kmeans_plot=ggsurvplot(kmeans_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
+kmeans_plot
+# NMF
+# nmf_fit=survfit(surv_object~nmf_2_clusters,data=df.use.os)
+# nmf_plot=ggsurvplot(nmf_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
+```
