@@ -868,18 +868,27 @@ loaddata[idx]=0
 ```
 
 ```{r}
+loaddata=merge(df.rna_counts,df.cluster_result,by="row.names")
+rownames(loaddata)=loaddata[,1]
+loaddata=loaddata[2:ncol(loaddata)]
+idx <- which(loaddata =='-Inf', arr.ind = TRUE)
+loaddata[idx]=0
+```
+
+```{r}
 class_label='batch'
-feature_cols=intersect(ensemble.sig,colnames(loaddata))
+feature_cols=intersect(ensemble.sig.deseq,colnames(loaddata))
 draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE)
 print(length(feature_cols))
 ```
 
 ```{r}
 class_label='kmeans_2_clusters'
-feature_cols=intersect(ensemble.sig,colnames(loaddata))
+feature_cols=intersect(ensemble.sig.deseq,colnames(loaddata))
 draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE)
 draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE,FALSE)
 print(length(feature_cols))
+kegg_table
 ```
 
 ### Save Data
@@ -990,8 +999,8 @@ test = bitr(used_ens_ids, #数据集
 head(test,2)
 
 # used_entrz_ids=mapIds(org.Hs.eg.db,keys=used_ens_ids,keytype="ENSEMBL",column="ENTREZID")
+used_entrz_ids=test[['ENTREZID']]
 print(paste0('used metab number is ',length(used_entrz_ids[!is.na(used_entrz_ids)]),' out of ',length(used_ens_ids)))
-used_entrz_ids=used_ens_ids
 
 kegg_result=enrichKEGG(
   test[['ENTREZID']],
@@ -1012,6 +1021,7 @@ kegg_table$FoldEnrich <- apply(kegg_table, 1,
                                  as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
                                  as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
 kegg_table$symbol=apply(kegg_table,1,get_symbols)
+
 # Generate Draw Table
 kegg_table_draw=kegg_table
 unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
@@ -1024,12 +1034,17 @@ kegg_table_draw
 
 # Figure using FDR as X
 kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
+kegg_table_draw
 kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-min((nrow(kegg_table_draw)-1),15)):nrow(kegg_table_draw),]
 dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
 # write.csv(kegg_table.mt2,paste0(dirpath,'counts_pathway_up.csv',collapse = '/'))
 
 kegg_table_draw$FDR
 kegg_table_draw$FoldEnrich
+
+# Up
+kegg_table_draw$comporison='UP'
+kegg_table_draw.up=kegg_table_draw
 p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
   geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
   scale_y_discrete(limits = kegg_table_draw[['Description']])+
@@ -1094,8 +1109,8 @@ test = bitr(used_ens_ids, #数据集
   OrgDb="org.Hs.eg.db") #人类 数据库
 head(test,2)
 
-print(paste0('used metab number is ',length(used_entrz_ids[!is.na(used_entrz_ids)]),' out of ',length(used_ens_ids)))
 used_entrz_ids=test[['ENTREZID']]
+print(paste0('used metab number is ',length(used_entrz_ids[!is.na(used_entrz_ids)]),' out of ',length(used_ens_ids)))
 length(used_entrz_ids)
 kegg_result=enrichKEGG(
   used_entrz_ids,
@@ -1120,6 +1135,7 @@ kegg_table$FoldEnrich <- apply(kegg_table, 1,
                                  as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
                                  as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
                                  as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+kegg_table$symbol=apply(kegg_table,1,get_symbols)
 
 # Generate Draw Table
 kegg_table_draw=kegg_table
@@ -1133,12 +1149,17 @@ kegg_table_draw
 
 # Figure using FDR as X
 kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
-kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-10):nrow(kegg_table_draw),]
+kegg_table_draw=kegg_table_draw[max(1,(nrow(kegg_table_draw)-10)):nrow(kegg_table_draw),]
 # dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
 # write.csv(kegg_table.mt2,paste0(dirpath,'counts_pathway_down.csv',collapse = '/'))
 
 kegg_table_draw$FDR
 kegg_table_draw$FoldEnrich
+
+# Down
+kegg_table_draw$comporison='DOWN'
+kegg_table_draw.down=kegg_table_draw
+
 p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
   geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
   scale_y_discrete(limits = kegg_table_draw[['Description']])+
@@ -1158,6 +1179,57 @@ p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
 
 # pdf(paste(dirpath,'rna_counts_up.pdf',sep = ''),12,7)
 print(p)
+```
+
+### Combine
+
+```{r}
+kegg_table_draw.all[kegg_table_draw.all$comporison=='DOWN','FDR']
+kegg_table_draw.all$FoldEnrich
+```
+
+```{r}
+
+kegg_table_draw.all=rbind(kegg_table_draw.up,kegg_table_draw.down)
+kegg_table_draw.all=kegg_table_draw.all[order(kegg_table_draw.all$pvalue,decreasing = TRUE),]
+
+
+# Up/Down
+ggplot(kegg_table_draw.all, aes(comporison, Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw.all[['Description']])+
+  scale_size(range = c(3, 12), breaks = c(3,5,7,8)) +
+# scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(2,30,4))) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  coord_fixed(ratio = 0.4) +
+  labs(x = "", y = "", title = "", 
+       fill = "Abs.Log2 (FC)", size = "-Log10 (P-value)") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+
+# Category
+ggplot(kegg_table_draw.all, aes(category, Description)) +
+  geom_point(aes(fill = -log10(FDR) , size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw.all[['Description']])+
+  scale_size(range = c(3, 12), breaks = c(3,5,7,8)) +
+# scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(2,30,4))) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  coord_fixed(ratio = 0.4) +
+  labs(x = "", y = "", title = "", 
+       fill = "Abs.Log2 (FC)", size = "-Log10 (P-value)") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+
 ```
 
 # Plot
