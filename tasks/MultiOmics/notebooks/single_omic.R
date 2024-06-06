@@ -26,8 +26,8 @@ getwd()
 setwd("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/notebooks/")
 source('utils.R')
 ##### Metab #####
-filepath.metab='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/Using/lipid.csv'
-# filepath.metab='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/Using/metab.csv'
+# filepath.metab='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/Using/lipid.csv'
+filepath.metab='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/Using/metab.csv'
 filepath.sample='/home/suh/workstation/MetabSubtype/tasks/Subtype/results/20240406/cluster_7e-2.csv'
 df.metab<-read.csv(filepath.metab, header= TRUE, check.names=F,row.names=1)
 df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F,row.names=1)
@@ -310,7 +310,7 @@ table(df.use_sample$tmp_survival)
 
 # Relabel Codex
 
-class_label='nmf_2_clusters'
+class_label='kmeans_2_clusters'
 df.use_sample=df.sample
 df.use_sample=df.use_sample[!is.na(df.use_sample[class_label]),]
 df.use=merge(df.raw_metab.scaled,df.use_sample[,class_label,drop=FALSE],by='row.names')

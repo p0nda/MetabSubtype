@@ -33,9 +33,9 @@ filepath.metab='~/workstation/MetabSubtype/tasks/Subtype/data/Using/metab.csv'
 filepath.sample='~/workstation/MetabSubtype/tasks/Subtype/data/Using/sample.csv'
 filepath.cluster_result='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/metab/cluster_result.csv'
 
-filepath.cluster_result='G:/repositories/MetabSubtype/tasks/MultiOmics/data/metab/cluster_result.csv'
-filepath.metab='G:/repositories/MetabSubtype/tasks/Subtype/data/Using/metab.csv'
-filepath.sample='G:/repositories/MetabSubtype/tasks/Subtype/data/Using/sample.csv'
+# filepath.cluster_result='G:/repositories/MetabSubtype/tasks/MultiOmics/data/metab/cluster_result.csv'
+# filepath.metab='G:/repositories/MetabSubtype/tasks/Subtype/data/Using/metab.csv'
+# filepath.sample='G:/repositories/MetabSubtype/tasks/Subtype/data/Using/sample.csv'
 
 df.cluster_result<-read.csv(filepath.cluster_result, header= TRUE, check.names=F,row.names=1)
 df.metab<-read.csv(filepath.metab, header= TRUE, check.names=F,row.names=1)
@@ -188,6 +188,8 @@ kegg_table
 
 # Mean Aggregate
 
+## Kmeans Cluster
+
 ```{r}
 test_df=merge(df.raw_metab,df.cluster_result,by="row.names")
 rownames(test_df)=test_df[,1]
@@ -338,6 +340,96 @@ p=ComplexHeatmap::pheatmap(mat,
                          
 )
 print(p)
+```
+
+## MT2
+
+```{r}
+
+
+
+##### Mean Aggregate #####  
+dirpath="~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/Metab/MT2/"
+# setwd(dirpath)
+class_label='MT2结构'
+type_2='high'
+type_1='low'
+
+df.use_sample=df.sample
+df.use_sample=df.use_sample[!is.na(df.use_sample[class_label]),]
+df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+pathway_matrix=df.use %>% group_by(!!sym(class_label)) %>% summarise_all(mean)
+dim(pathway_matrix)
+colnames(pathway_matrix)
+# Row Name Specified
+df.pathway_fc=as.data.frame(pathway_matrix)
+row.names(df.pathway_fc)=df.pathway_fc[[1]]
+df.pathway_fc=df.pathway_fc[,2:ncol(df.pathway_fc)]
+df.pathway_fc['fc',]=df.pathway_fc[type_2,]/df.pathway_fc[type_1,]
+df.pathway_fc=t(df.pathway_fc)
+df.pathway_fc=as.data.frame(df.pathway_fc)
+df.pathway_fc
+colnames(df.pathway_fc)
+df.pathway_fc[['fc']]
+df.pathway_fc['log2fc']=sapply(df.pathway_fc[['fc']],log2)
+pvalue.kmeans_pathway=pvalue_by_wilcox(df.use,metab_num,class_label)
+pvalue.kmeans_pathway
+match(pvalue.kmeans_pathway[['Metabolites']],rownames(df.pathway_fc))
+df.pathway_fc$pvalue=pvalue.kmeans_pathway[match(pvalue.kmeans_pathway[['Metabolites']],rownames(df.pathway_fc)),'pvalue']
+df.pathway_fc$is_sig=df.pathway_fc$pvalue<=5e-2
+
+pvalue_cutoff=1
+use_row_ha=FALSE
+col_split=TRUE
+pathway_names=unique(kegg_table$Description)
+for (pathway_name in pathway_names){
+  # Get Pathway CPDs
+  metabs.kegg.tca=df.new[df.new$pathway_name==pathway_name,'query']
+  metabs.kegg.tca
+  metabs.ms.tca=get_ms_metabs(metabs.kegg.tca)
+  
+  metabs.ms.tca
+  metabs.ms.tca=metabs.ms.tca[metabs.ms.tca!='NA']
+  row_ha=rowAnnotation(sig=df.pathway_fc[metabs.ms.tca,'is_sig'],col=list(sig=c('TRUE'='yellow','FALSE'='white')))
+  mat=as.matrix(df.pathway_fc[metabs.ms.tca,'log2fc',drop=FALSE])
+  # mat=mat[order(mat),,drop=FALSE]
+  bk=c(-1,0,1)
+  col_fun<-colorRamp2(
+    bk,
+    c("#1D91C0", "white", "#E31A1C"))
+  p=ComplexHeatmap::pheatmap(mat,
+                           name = pathway_name,
+                           cluster_cols = F,
+                           cluster_rows = F,
+                           cellheight = 25,
+                           cellwidth = 40,
+                           col = col_fun,
+                           right_annotation=row_ha
+                           # scale="col"
+                           
+  )
+  # print(p)
+  # Sys.sleep(3)
+  pathway_name=str_replace_all(pathway_name,'/','_')
+  pathway_name=str_replace_all(pathway_name,',','_')
+  pathway_name=str_replace_all(pathway_name,'\\(','_')
+  pathway_name=str_replace_all(pathway_name,'\\)','_')
+  filepath=paste(dirpath,pathway_name,'.pdf',sep='')
+  filepath=str_replace_all(filepath,'  ',' ')
+  if (pathway_name %in% c('Purine metabolism','Pyrimidine metabolism') ){
+    pdf(filepath,5,20)
+  }else{
+    pdf(filepath)
+  }
+  draw(p)
+  dev.off()
+
+}
+
+
 ```
 
 # PCA
