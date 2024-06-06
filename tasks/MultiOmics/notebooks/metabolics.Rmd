@@ -224,7 +224,7 @@ pvalue.mt2_pathway=pvalue_by_wilcox(df.use,metab_num,class_label)
 pvalue.mt2_pathway
 match(pvalue.mt2_pathway[['Metabolites']],rownames(df.pathway_fc))
 df.pathway_fc$pvalue=pvalue.mt2_pathway[match(pvalue.mt2_pathway[['Metabolites']],rownames(df.pathway_fc)),'pvalue']
-df.pathway_fc['kynurenine',]
+df.pathway_fc$is_sig=df.pathway_fc$pvalue<=5e-2
 
 pvalue_cutoff=1
 use_row_ha=FALSE
@@ -238,7 +238,8 @@ for (pathway_name in pathway_names){
   
   metabs.ms.tca
   metabs.ms.tca=metabs.ms.tca[metabs.ms.tca!='NA']
-  mat=as.matrix(df.pathway_fc[,'log2fc'])
+  row_ha=rowAnnotation(sig=df.pathway_fc[metabs.ms.tca,'is_sig'],col=list(sig=c('TRUE'='yellow','FALSE'='white')))
+
   mat=as.matrix(df.pathway_fc[metabs.ms.tca,'log2fc',drop=FALSE])
   mat=mat[order(mat),,drop=FALSE]
   bk=c(-1,0,1)
@@ -251,7 +252,8 @@ for (pathway_name in pathway_names){
                            cluster_rows = F,
                            cellheight = 25,
                            cellwidth = 40,
-                           col = col_fun
+                           col = col_fun,
+                           right_annotation=row_ha
                            # scale="col"
                            
   )
@@ -263,7 +265,11 @@ for (pathway_name in pathway_names){
   pathway_name=str_replace_all(pathway_name,'\\)','_')
   filepath=paste(dirpath,pathway_name,'.pdf',sep='')
   filepath=str_replace_all(filepath,'  ',' ')
-  pdf(filepath)
+  if (pathway_name==''){
+    pdf(filepath,5,20)
+  }else{
+    pdf(filepath)
+  }
   draw(p)
   dev.off()
 
@@ -440,15 +446,15 @@ for (fig_num in c(1:nrow(df.cpd_kegg))){
     filepath.cpd_fig=paste(dirpath,pathway_name,'.pdf',sep='')
     filepath.cpd_fig=str_replace_all(filepath.cpd_fig,' ','_')
     
-    pdf(filepath.cpd_fig)
+    # pdf(filepath.cpd_fig)
     print(p)
-    dev.off()
+    # dev.off()
     
 }
 res<-wrap_plots(ps,nrow=4,guides='keep')
-pdf(paste0(dirpath,'/all_in_one.pdf'),25,25)
-print(res)
-dev.off()
+# pdf(paste0(dirpath,'/all_in_one.pdf'),25,25)
+# print(res)
+# dev.off()
 res
 ```
 

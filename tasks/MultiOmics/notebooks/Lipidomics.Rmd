@@ -23,8 +23,7 @@ library(gridExtra)
 
 
 getwd()
-setwd("~/workstation/MetabSubtype/tasks/Subtype/notebooks/")
-source('utils.R')
+source('~/workstation/MetabSubtype/tasks/Subtype/notebooks/utils.R')
 
 ```
 
@@ -97,6 +96,57 @@ df.metab.pca=pca.lipid$x
 using_num=51
 df.metab.pca=df.metab.pca[,1:using_num]
 df.metab.pca=as.data.frame(nneg(as.matrix(df.metab.pca),method='min'))
+```
+
+# Bubble Fig
+
+## Stat
+
+```{r}
+##### Draw ######
+class_label='kmeans_2_clusters'
+df.use_sample=df.sample
+df.use=merge(df.raw_metab,df.cluster_result[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+volcano.test.results=pvalue_by_wilcox(df.use,metab_num,class_label)
+
+type1='1'
+type2='2'
+volcano.test.results$FC=apply(df.use[,1:metab_num], 2, 
+                              function(x) 
+                                mean(as.numeric(x[which(df.use[class_label] == type2)]))/
+                                mean(as.numeric(x[which(df.use[class_label] == type1)])))
+head(volcano.test.results)
+# Log2 (FC)
+volcano.test.results$log2FC <- log2(volcano.test.results[,'FC'])
+```
+
+## Draw
+
+```{r}
+
+
+
+lipo.bubble %>%
+  arrange(desc(`FDR`)) %>%
+  ggplot(aes(x=number, y=`Log2 (FC) relative to Ctrl`, size=`FDR`, color=`lipid species`)) +
+  geom_point(alpha=0.4) +
+  scale_size(range = c(0.1, 3.5), name="Population (M)" +
+               scale_fill_viridis(discrete=TRUE, guide=FALSE, option="A"))+
+  theme(plot.title = element_text( size = 6, vjust = 6, hjust = 0.5, face = "plain"), 
+        axis.title.x = element_text(size = 6, vjust = -2, hjust = 0.55, face = "plain"), 
+        axis.title.y = element_text(size = 6, vjust = 2, face = "plain"),
+        axis.text.x = element_text(size = 6, face = "plain", colour = "black"), 
+        axis.text.y = element_text(size = 6, face = "plain", colour = "black"),
+        legend.title = element_text(size = 6, face = "plain", colour = "black"),
+        legend.text = element_text(size = 2), 
+        legend.key.size = unit(0.1, "cm"), 
+        legend.spacing = unit(0.1, "cm"))+
+  theme_bw() +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm"), aspect.ratio = 0.45)+
+  geom_hline(yintercept = c(-0.58,0.58),lty=4,col="black",lwd=0.4)
 ```
 
 # Clustering
@@ -217,4 +267,66 @@ nmf_plot=ggsurvplot(nmf_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
 # Combine
 arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,pval = TRUE,title=toupper(time_label_col))
 
+```
+
+## Lipid Bubble
+
+### Stat
+
+```{r}
+
+class_label='kmeans_2_clusters'
+df.use_sample=df.cluster_result
+df.use=merge(df.raw_metab,df.cluster_result[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+volcano.test.results=pvalue_by_wilcox(df.use,metab_num,class_label)
+volcano.test.results$FDR=p.adjust(volcano.test.results$pvalue,method="BH")
+
+type1='1'
+type2='2'
+volcano.test.results$FC=apply(df.use[,1:metab_num], 2, 
+                              function(x) 
+                                mean(as.numeric(x[which(df.use[class_label] == type2)]))/
+                                mean(as.numeric(x[which(df.use[class_label] == type1)])))
+head(volcano.test.results)
+# Log2 (FC)
+volcano.test.results$log2FC <- log2(volcano.test.results[,'FC'])
+
+volcano.test.results
+```
+
+### Draw
+
+```{r}
+
+volcano.test.results$lipid_class=sapply(volcano.test.results$Metabolites,function(col)
+{str_extract(col,'([A-Z]*[a-z]*)*')})
+
+volcano.test.results$lipid_class
+```
+
+```{r}
+lipo.bubble=volcano.test.results
+lipo.bubble %>%
+  arrange(desc(`FDR`)) %>%
+  ggplot(aes(x=Metabolites, y=log2FC, size=FDR, color=lipid_class)) +
+  geom_point(alpha=0.4) +
+  scale_size(range = c(0.1, 3.5), name="Population (M)" 
+             # +
+               # scale_fill_viridis(discrete=TRUE, guide=TRUE, option="A")
+               )+
+  theme(plot.title = element_text( size = 6, vjust = 6, hjust = 0.5, face = "plain"), 
+        axis.title.x = element_text(size = 6, vjust = -2, hjust = 0.55, face = "plain"), 
+        axis.title.y = element_text(size = 6, vjust = 2, face = "plain"),
+        axis.text.x = element_text(size = 0, face = "plain", colour = "black"), 
+        axis.text.y = element_text(size = 6, face = "plain", colour = "black"),
+        legend.title = element_text(size = 6, face = "plain", colour = "black"),
+        legend.text = element_text(size = 2), 
+        legend.key.size = unit(0.1, "cm"), 
+        legend.spacing = unit(0.1, "cm"))+
+  theme_bw() +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm"), aspect.ratio = 0.45)+
+  geom_hline(yintercept = c(-log2(1.2),log2(1.2)),lty=4,col="black",lwd=0.4)
 ```
