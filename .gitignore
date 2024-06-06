@@ -165,3 +165,4 @@ rstudio-server-2024.04.0-735-amd64.deb.1
 tasks/MultiOmics/results/20240515/rna_dds.pkl
 tasks/MultiOmics/results/20240523_summary/Metab/Mean/Arginine biosynthesis.pdf
 *.pdf
+.Rproj.user
