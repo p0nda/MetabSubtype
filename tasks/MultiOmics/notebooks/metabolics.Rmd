@@ -220,10 +220,10 @@ df.pathway_fc
 colnames(df.pathway_fc)
 df.pathway_fc[['fc']]
 df.pathway_fc['log2fc']=sapply(df.pathway_fc[['fc']],log2)
-pvalue.mt2_pathway=pvalue_by_wilcox(df.use,metab_num,class_label)
-pvalue.mt2_pathway
-match(pvalue.mt2_pathway[['Metabolites']],rownames(df.pathway_fc))
-df.pathway_fc$pvalue=pvalue.mt2_pathway[match(pvalue.mt2_pathway[['Metabolites']],rownames(df.pathway_fc)),'pvalue']
+pvalue.kmeans_pathway=pvalue_by_wilcox(df.use,metab_num,class_label)
+pvalue.kmeans_pathway
+match(pvalue.kmeans_pathway[['Metabolites']],rownames(df.pathway_fc))
+df.pathway_fc$pvalue=pvalue.kmeans_pathway[match(pvalue.kmeans_pathway[['Metabolites']],rownames(df.pathway_fc)),'pvalue']
 df.pathway_fc$is_sig=df.pathway_fc$pvalue<=5e-2
 
 pvalue_cutoff=1
@@ -239,9 +239,8 @@ for (pathway_name in pathway_names){
   metabs.ms.tca
   metabs.ms.tca=metabs.ms.tca[metabs.ms.tca!='NA']
   row_ha=rowAnnotation(sig=df.pathway_fc[metabs.ms.tca,'is_sig'],col=list(sig=c('TRUE'='yellow','FALSE'='white')))
-
   mat=as.matrix(df.pathway_fc[metabs.ms.tca,'log2fc',drop=FALSE])
-  mat=mat[order(mat),,drop=FALSE]
+  # mat=mat[order(mat),,drop=FALSE]
   bk=c(-1,0,1)
   col_fun<-colorRamp2(
     bk,
@@ -265,7 +264,7 @@ for (pathway_name in pathway_names){
   pathway_name=str_replace_all(pathway_name,'\\)','_')
   filepath=paste(dirpath,pathway_name,'.pdf',sep='')
   filepath=str_replace_all(filepath,'  ',' ')
-  if (pathway_name==''){
+  if (pathway_name=='Purine metabolism'){
     pdf(filepath,5,20)
   }else{
     pdf(filepath)
