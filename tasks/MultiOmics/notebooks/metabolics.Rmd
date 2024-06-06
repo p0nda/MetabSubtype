@@ -182,7 +182,8 @@ p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
         legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
 
 print(p)
-
+# write.csv(kegg_table,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/metab_kegg.csv")
+kegg_table
 ```
 
 # Mean Aggregate
@@ -228,7 +229,7 @@ pvalue.mt2_pathway=pvalue_by_wilcox(df.use,metab_num,class_label)
 pvalue.mt2_pathway
 match(pvalue.mt2_pathway[['Metabolites']],rownames(df.pathway_fc))
 df.pathway_fc$pvalue=pvalue.mt2_pathway[match(pvalue.mt2_pathway[['Metabolites']],rownames(df.pathway_fc)),'pvalue']
-df.pathway_fc['kynurenine',]
+df.pathway_fc$is_sig=df.pathway_fc$pvalue<=5e-2
 
 pvalue_cutoff=1
 use_row_ha=FALSE
@@ -242,7 +243,8 @@ for (pathway_name in pathway_names){
   
   metabs.ms.tca
   metabs.ms.tca=metabs.ms.tca[metabs.ms.tca!='NA']
-  mat=as.matrix(df.pathway_fc[,'log2fc'])
+  row_ha=rowAnnotation(sig=df.pathway_fc[metabs.ms.tca,'is_sig'],col=list(sig=c('TRUE'='yellow','FALSE'='white')))
+
   mat=as.matrix(df.pathway_fc[metabs.ms.tca,'log2fc',drop=FALSE])
   mat=mat[order(mat),,drop=FALSE]
   bk=c(-1,0,1)
@@ -255,7 +257,8 @@ for (pathway_name in pathway_names){
                            cluster_rows = F,
                            cellheight = 25,
                            cellwidth = 40,
-                           col = col_fun
+                           col = col_fun,
+                           right_annotation=row_ha
                            # scale="col"
                            
   )
@@ -267,7 +270,11 @@ for (pathway_name in pathway_names){
   pathway_name=str_replace_all(pathway_name,'\\)','_')
   filepath=paste(dirpath,pathway_name,'.pdf',sep='')
   filepath=str_replace_all(filepath,'  ',' ')
-  pdf(filepath)
+  if (pathway_name==''){
+    pdf(filepath,5,20)
+  }else{
+    pdf(filepath)
+  }
   draw(p)
   dev.off()
 
@@ -377,6 +384,8 @@ draw_volcano(volcano.test.results,pvalue_cutoff,fc_up_cutoff)
 # CPD Line
 
 ```{r}
+# dirpath="~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/Metab/Pathway_Line/"
+# df.cpd_kegg=kegg_table
 dirpath="~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/Metab/Pathway_Draw/"
 df.cpd_kegg=kegg_table_draw
 
@@ -387,6 +396,11 @@ for (fig_num in c(1:nrow(df.cpd_kegg))){
     print(pathway_name)
     queries=unlist(strsplit(df.cpd_kegg[which(df.cpd_kegg[['Description']]==pathway_name),'query'],'/'))
     queries=unname(unlist(sapply(queries,function(search_metabolite){(colnames(df.raw_metab)[grep(search_metabolite,colnames(df.raw_metab),ignore.case = TRUE)][1])})))
+    if(pathway_name=='Purine metabolism'){
+      queries=c('GMP','IMP','Adenine','dAMP','Deoxyguanosine','deoxyinosine')
+      queries=tolower(queries)
+
+    }
     queries=queries[!is.na(queries)]
     print(queries)
     # # Try to norm in loop
@@ -428,7 +442,7 @@ for (fig_num in c(1:nrow(df.cpd_kegg))){
       }
     }
     df.draw[,2:4]=lapply(df.draw[,2:4],smartConvert)
-    df.draw
+    df.draw$k_cluster_3=as.factor(df.draw$k_cluster_3)
     # color_palette <- brewesr.pal(n = 20, name = "Set2") 
     color_palette
     blank_margin=0.02
@@ -436,8 +450,8 @@ for (fig_num in c(1:nrow(df.cpd_kegg))){
     ylim_up=max(df.draw$mean)+max(df.draw$sem)+blank_margin
     p=ggplot(data=df.draw,aes(x = k_cluster_3, y = mean, colour = Metabolite,group=Metabolite),
              position=position_dodge(0.05))+
-      geom_point(aes(fill=Metabolite),size=3,pch=16,position=position_dodge(0.05))+
-      geom_line(size=1.1,position=position_dodge(0.05))+
+      geom_point(aes(fill=Metabolite),size=4,pch=16,position=position_dodge(0.05))+
+      geom_line(size=1.2,position=position_dodge(0.05))+
       geom_errorbar(aes(ymin=mean-sem, ymax=mean+sem,colour = Metabolite,group=Metabolite), width=.2,size=1.1,
                     position=position_dodge(0.05))+
   scale_x_discrete(labels=c('1','2'),breaks=waiver())+
@@ -467,25 +481,27 @@ for (fig_num in c(1:nrow(df.cpd_kegg))){
     filepath.cpd_fig=paste(dirpath,pathway_name,'.pdf',sep='')
     filepath.cpd_fig=str_replace_all(filepath.cpd_fig,' ','_')
     
-    pdf(filepath.cpd_fig)
+    # pdf(filepath.cpd_fig)
     print(p)
-    dev.off()
+    # dev.off()
     
 }
 res<-wrap_plots(ps,nrow=4,guides='keep')
-pdf(paste0(dirpath,'/all_in_one.pdf'),25,25)
-print(res)
-dev.off()
+# pdf(paste0(dirpath,'/all_in_one.pdf'),25,25)
+# print(res)
+# dev.off()
 res
 ```
 
-## Specific
+## Purine
 
 ```{r}
 class_label='kmeans_2_clusters'
 pathway_name="Purine metabolism"
-queries=unlist(strsplit(df.cpd_kegg[which(df.cpd_kegg[['Description']]==pathway_name),'query'],'/'))
-queries=unname(unlist(sapply(queries,function(search_metabolite){(colnames(df.raw_metab)[grep(search_metabolite,colnames(df.raw_metab),ignore.case = TRUE)][1])})))
+# queries=unlist(strsplit(df.cpd_kegg[which(df.cpd_kegg[['Description']]==pathway_name),'query'],'/'))
+# queries=unname(unlist(sapply(queries,function(search_metabolite){(colnames(df.raw_metab)[grep(search_metabolite,colnames(df.raw_metab),ignore.case = TRUE)][1])})))
+queries=c('GMP','IMP','Adenine','dAMP','Deoxyguanosine','deoxyinosine')
+queries=tolower(queries)
 queries=queries[!is.na(queries)]
 print(queries)
 # # Try to norm in loop
@@ -530,14 +546,16 @@ for (row_index in c(1:length(queries))){
 df.draw[,2:4]=lapply(df.draw[,2:4],smartConvert)
 df.draw
 # color_palette <- brewesr.pal(n = 20, name = "Set2") 
+df.draw$k_cluster_3=as.factor(df.draw$k_cluster_3)
 color_palette
 blank_margin=0.02
 ylim_down=min(df.draw$mean)-max(df.draw$sem)-blank_margin
 ylim_up=max(df.draw$mean)+max(df.draw$sem)+blank_margin
+
 p=ggplot(data=df.draw,aes(x = k_cluster_3, y = mean, colour = Metabolite,group=Metabolite),
          position=position_dodge(0.05))+
-  geom_point(aes(fill=Metabolite),size=3,pch=16,position=position_dodge(0.05))+
-  geom_line(size=1.1,position=position_dodge(0.05))+
+  geom_point(aes(fill=Metabolite),size=4,pch=16,position=position_dodge(0.05))+
+  geom_line(size=1.2,position=position_dodge(0.05))+
   geom_errorbar(aes(ymin=mean-sem, ymax=mean+sem,colour = Metabolite,group=Metabolite), width=.2,size=1.1,
                 position=position_dodge(0.05))+
   scale_x_discrete(labels=c('1','2'),breaks=waiver())+
