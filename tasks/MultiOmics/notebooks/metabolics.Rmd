@@ -22,9 +22,8 @@ library(survival)
 
 
 getwd()
-setwd("~/workstation/MetabSubtype/tasks/Subtype/notebooks/")
-source('utils.R')
-
+source('G:/repositories/MetabSubtype/tasks/MultiOmics/notebooks/utils.R')
+source("~/workstation/MetabSubtype/tasks/Subtype/notebooks/utils.R")
 ```
 
 ```{r}
@@ -32,8 +31,12 @@ source('utils.R')
 LABEL_NUM=0
 filepath.metab='~/workstation/MetabSubtype/tasks/Subtype/data/Using/metab.csv'
 filepath.sample='~/workstation/MetabSubtype/tasks/Subtype/data/Using/sample.csv'
-
 filepath.cluster_result='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/metab/cluster_result.csv'
+
+filepath.cluster_result='G:/repositories/MetabSubtype/tasks/MultiOmics/data/metab/cluster_result.csv'
+filepath.metab='G:/repositories/MetabSubtype/tasks/Subtype/data/Using/metab.csv'
+filepath.sample='G:/repositories/MetabSubtype/tasks/Subtype/data/Using/sample.csv'
+
 df.cluster_result<-read.csv(filepath.cluster_result, header= TRUE, check.names=F,row.names=1)
 df.metab<-read.csv(filepath.metab, header= TRUE, check.names=F,row.names=1)
 df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
@@ -73,6 +76,8 @@ dim(df.raw_metab.scaled)
 
 df.name_map=read.csv("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_name_map.csv", header= TRUE, check.names=F)
 df.path.metab <- read.csv('/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_hsa_pathway_map.csv', header = T)
+df.name_map=read.csv("G:/repositories/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_name_map.csv", header= TRUE, check.names=F)
+df.path.metab <- read.csv('G:/repositories/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_hsa_pathway_map.csv', header = T)
 df.path.metab=df.path.metab[1:3206,]
 df.path.metab=df.path.metab[!(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
 # df.path.metab[(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
@@ -276,8 +281,38 @@ for (pathway_name in pathway_names){
 
 ```
 
-```{r}
+```{r fig.height=12, fig.width=6}
 pathway_name='Purine metabolism'
+  # Get Pathway CPDs
+metabs.kegg.tca=df.new[df.new$pathway_name==pathway_name,'query']
+metabs.kegg.tca
+metabs.ms.tca=get_ms_metabs(metabs.kegg.tca)
+
+metabs.ms.tca
+metabs.ms.tca=metabs.ms.tca[metabs.ms.tca!='NA']
+mat=as.matrix(df.pathway_fc[,'log2fc'])
+mat=as.matrix(df.pathway_fc[metabs.ms.tca,'log2fc',drop=FALSE])
+mat=mat[order(mat),,drop=FALSE]
+bk=c(-1,0,1)
+col_fun<-colorRamp2(
+  bk,
+  c("#1D91C0", "white", "#E31A1C"))
+p=ComplexHeatmap::pheatmap(mat,
+                         name = pathway_name,
+                         cluster_cols = F,
+                         cluster_rows = F,
+                         cellheight = 25,
+                         cellwidth = 40,
+                         col = col_fun
+                         # scale="col"
+                         
+)
+print(p)
+```
+
+```{r fig.height=11, fig.width=6}
+kegg_table
+pathway_name='Pyrimidine metabolism'
   # Get Pathway CPDs
 metabs.kegg.tca=df.new[df.new$pathway_name==pathway_name,'query']
 metabs.kegg.tca

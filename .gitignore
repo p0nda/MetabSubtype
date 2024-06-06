@@ -164,3 +164,5 @@ rstudio-server-2024.04.0-735-amd64.deb
 rstudio-server-2024.04.0-735-amd64.deb.1
 tasks/MultiOmics/results/20240515/rna_dds.pkl
 # *.pdf
+
+.Rproj.user
