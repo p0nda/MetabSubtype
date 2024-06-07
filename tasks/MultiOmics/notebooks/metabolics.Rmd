@@ -387,6 +387,7 @@ col_split=TRUE
 pathway_names=unique(kegg_table$Description)
 for (pathway_name in pathway_names){
   # Get Pathway CPDs
+  pathway_name='Pentose phosphate pathway'
   metabs.kegg.tca=df.new[df.new$pathway_name==pathway_name,'query']
   metabs.kegg.tca
   metabs.ms.tca=get_ms_metabs(metabs.kegg.tca)
