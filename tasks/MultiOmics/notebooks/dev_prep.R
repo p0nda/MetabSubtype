@@ -10,7 +10,7 @@ install.packages("stringr", dependencies=TRUE, INSTALL_opts = c('--no-lock'))
 library(stringr)
 
 # Grid
-if (!require("gridExtra")) install.packages("gridExtra", dependencies = TRUE)
+if (!require("gridExtra")) install.packages("gridExtra", dependenfcies = TRUE)
 
 # dplyr
 if (!require(dplyr)) {

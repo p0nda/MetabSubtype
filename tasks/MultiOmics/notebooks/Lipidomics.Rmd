@@ -44,18 +44,16 @@ LABEL_NUM=0
 filepath.metab='~/workstation/MetabSubtype/tasks/Subtype/data/Using/lipid.csv'
 filepath.sample='~/workstation/MetabSubtype/tasks/Subtype/data/Using/sample.csv'
 df.metab<-read.csv(filepath.metab, header= TRUE, check.names=F,row.names=1)
-df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
-df.metab[1:5,1:5]
 dim(df.metab)
+df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
 length(unique((df.metab[,1])))
-unique(df.metab[,1])
-df.metab[,1]
 df.metab[df.metab=='']=NA
+dim(df.metab)
+
 df.sample[df.sample=='']=NA
 df.sample[df.sample=='Neg']=NA
 # df.sample=df.sample[!is.na(df.sample['Sample Name']),c('Sample Name','主要分型','生存时间分组','MT2结构')]
 df.sample=df.sample[!is.na(df.sample['Sample Name']),]
-df.sample['Sample Name']
 row.names(df.sample)=df.sample[['Sample Name']]
 df.sample=df.sample[rownames(df.metab),]
 df.sample[match('1520',rownames(df.sample)),'oss']=0
