@@ -23,7 +23,7 @@ library(gridExtra)
 
 
 getwd()
-source('~/workstation/MetabSubtype/tasks/Subtype/notebooks/utils.R')
+source('~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/utils.R')
 
 ```
 
@@ -73,7 +73,7 @@ df.raw_metab.scaled=df.raw_metab.log
 raw_metab_mean=apply(df.raw_metab.log,1,mean)
 raw_metab_std=apply(df.raw_metab.log,1,sd)
 df.raw_metab.scaled=(df.raw_metab.scaled-raw_metab_mean)/raw_metab_std
-df.raw_metab.scaled=as.data.frame(nneg(as.matrix(df.raw_metab.scaled),method='min'))
+# df.raw_metab.scaled=as.data.frame(nneg(as.matrix(df.raw_metab.scaled),method='min'))
 colnames(df.raw_metab.scaled)
 dim(df.raw_metab.scaled)
 ```
@@ -81,6 +81,10 @@ dim(df.raw_metab.scaled)
 ## Dimension Reduction
 
 ### PCA
+
+```{r}
+colnames(df.raw_metab.scaled)[ncol(df.raw_metab.scaled)]
+```
 
 ```{r}
 pca.lipid=prcomp(df.raw_metab.scaled,scale.=TRUE)
@@ -91,7 +95,7 @@ summary(pca.lipid)
 ```{r}
 
 df.metab.pca=pca.lipid$x
-using_num=51
+using_num=49
 df.metab.pca=df.metab.pca[,1:using_num]
 df.metab.pca=as.data.frame(nneg(as.matrix(df.metab.pca),method='min'))
 ```
@@ -119,6 +123,11 @@ volcano.test.results$FC=apply(df.use[,1:metab_num], 2,
 head(volcano.test.results)
 # Log2 (FC)
 volcano.test.results$log2FC <- log2(volcano.test.results[,'FC'])
+
+pvalue_cutoff=5e-2
+fc_up_cutoff=3/2
+draw_volcano(volcano.test.results,pvalue_cutoff,fc_up_cutoff)
+
 ```
 
 ## Draw
@@ -171,7 +180,9 @@ df.cluster_result.correction
 
 ## Survival Test
 
-```{r fig.height=6, fig.width=10}
+```{r fig.height=6, fig.width=8}
+
+df.use=df.metab.pca
 
 # 1203948 321
 set.seed(321)
@@ -193,12 +204,17 @@ surv_object=Surv(df.use.os[[time_label_col]],df.use.os[[event_label_col]])
 # K-MEANS
 kmeans_fit=survfit(surv_object~kmeans_2_clusters,data=df.use.os)
 kmeans_plot=ggsurvplot(kmeans_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
+pdf("~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/lipid_kmeans_survival.pdf")
+# ggsave(file="~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/lipid_kmeans_survival.pdf",print(kmeans_plot)) # It's not working. Why?
+print(kmeans_plot$plot,newpage = FALSE)
 # NMF
 nmf_fit=survfit(surv_object~nmf_2_clusters,data=df.use.os)
 nmf_plot=ggsurvplot(nmf_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
 # nmf_plot
 # Combine
 arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,pval = TRUE,title=toupper(time_label_col))
+dev.off()
+
 ```
 
 ## Save Result
@@ -207,7 +223,7 @@ arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,p
 df.sample_cluster=merge(df.sample,df.cluster_result.correction,by="row.names")
 row.names(df.sample_cluster)=df.sample_cluster[[1]]
 df.sample_cluster=df.sample_cluster[,2:ncol(df.sample_cluster)]
-filepath.cluster='~/workstation/MetabSubtype/tasks/Subtype/results/20240508/lipid_cluster_1e-2.csv'
+filepath.cluster='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240815/lipid_cluster_1e-2.csv'
 #
 # write.csv(df.sample_cluster,filepath.cluster)
 #
@@ -230,6 +246,15 @@ draw_single_heatmap(df.use,metab_num,'kmeans_3_clusters',p_cutoff,TRUE)
 draw_single_heatmap(df.use,metab_num,'nmf_3_clusters',p_cutoff,TRUE )
 draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',p_cutoff,TRUE )
 draw_single_heatmap(df.use,metab_num,'nmf_2_clusters',p_cutoff,TRUE )
+```
+
+```{r}
+pdf("lipid_kmeans_2_sig_heatmap.pdf")
+draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',5e-2,TRUE )
+dev.off()
+pdf("lipid_kmeans_2_all_heatmap.pdf")
+draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',1,TRUE )
+dev.off()
 ```
 
 ## Survival
@@ -275,7 +300,7 @@ arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,p
 
 class_label='kmeans_2_clusters'
 df.use_sample=df.cluster_result
-df.use=merge(df.raw_metab,df.cluster_result[,class_label,drop=FALSE],by="row.names")
+df.use=merge(df.raw_metab.scaled,df.cluster_result.correction[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
@@ -293,22 +318,28 @@ head(volcano.test.results)
 volcano.test.results$log2FC <- log2(volcano.test.results[,'FC'])
 
 volcano.test.results
+
+
+volcano.test.results$lipid_class=sapply(volcano.test.results$Metabolites,function(col)
+{str_extract(col,'([A-Z]*[a-z]*)*')})
+
 ```
 
 ### Draw
 
 ```{r}
 
-volcano.test.results$lipid_class=sapply(volcano.test.results$Metabolites,function(col)
-{str_extract(col,'([A-Z]*[a-z]*)*')})
-
 table(volcano.test.results$lipid_class)
 sum(table(volcano.test.results$lipid_class))
 # write.csv(volcano.test.results,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/lipid_stat.csv")
 # volcano.test.results$lipid_class
+
+# Test Stored Volcano
+# volcano.test.results=read.csv("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/lipid_stat.csv",row.names = 1)
 ```
 
 ```{r}
+# pdf("lipid_bubble.pdf")
 lipo.bubble=volcano.test.results
 lipo.bubble %>%
   filter(lipid_class %in% c('Cer','Hex','LPC','LPE','SM','PC','PE','PG','PI','PS','TAG','DAG','TG')) %>%
@@ -335,4 +366,47 @@ lipo.bubble %>%
   #       axis.text.x=element_blank(),
   #       axis.ticks.x=element_blank())+
   geom_hline(yintercept = c(-log2(1.2),log2(1.2)),lty=4,col="black",lwd=0.4)
+# dev.off()
+```
+
+## Boxplot
+
+```{r}
+class_label='kmeans_2_clusters'
+df.grep_lipid=get_grep_df(df.raw_metab.scaled,metab_num)
+use_num=ncol(df.grep_lipid)
+df.use=merge(df.grep_lipid,df.cluster_result.correction[,c(class_label),drop=FALSE],by="row.names")
+rownames(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+df.use[class_label]=as.factor(df.use[[class_label]])
+# Calculate p-value
+df.use[[class_label]]
+pvalues=sapply(X=(colnames(df.use)[1:use_num]),FUN=function(feature){
+  print(feature)
+    wilcox.test(df.use[[feature]] ~ df.use[[class_label]],exact=FALSE)$p.value
+})
+pvalues
+significant_headgroups=names(pvalues[pvalues<=5e-2])
+headgroups=names(pvalues[pvalues<=1e-1])
+significant_headgroups
+headgroups
+df.use[class_label]
+# draw_boxplot(df.use,significant_headgroups[1],class_label)
+# draw_boxplot(df.use,significant_headgroups[2],class_label)
+# draw_boxplot(df.use,headgroups[1],class_label)
+
+significant_headgroups=c('Cer','TG','LPC')
+
+for (headgroup in significant_headgroups){
+  filepath.box_plot=paste0("lipid_",headgroup,"_boxplot.pdf")
+  pdf(filepath.box_plot)
+  draw_boxplot(df.use,headgroup,class_label,is_scale=TRUE)
+
+  dev.off()
+}
+
+```
+
+```{r}
+rownames(df.grep_lipid)
 ```

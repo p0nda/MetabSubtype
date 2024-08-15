@@ -245,13 +245,17 @@ draw_plsda <- function(df.raw, target_col, using_num, figure_title, figure_save_
     }
 }
 ##### BoxPlot #####
-draw_boxplot<-function(df.use,feature,class_label){
+draw_boxplot<-function(df.use,feature,class_label,is_scale=FALSE){
+    if(is_scale){
+      df.use[[feature]] <- (df.use[[feature]] - min(df.use[[feature]], na.rm = TRUE)) / 
+        (max(df.use[[feature]], na.rm = TRUE) - min(df.use[[feature]], na.rm = TRUE))
+    }
     p=ggplot(df.use, aes_string(x = class_label, y = feature) )+
         geom_boxplot(width = 0.4,aes_string(color=class_label)) +  # Remove outlier points
         geom_jitter(width = 0.1,aes_string(color=class_label))+
         # stat_compare_means()+
         stat_compare_means(method = "wilcox.test", label = "p.format", label.x.npc = 0.5,
-                        label.y = max(df.use[[feature]]) + 1,size=8) +
+                        label.y = max(df.use[[feature]]) + 0.2,size=8) +
         theme_bw() +
         labs(x = "", y = "Normalized", title = feature,color='') +
         theme(axis.title.x = element_text(size = 17, hjust = 0.5, face = "plain"),
@@ -262,7 +266,7 @@ draw_boxplot<-function(df.use,feature,class_label){
         ##调整legend字体  
         theme(legend.text = element_text(size = 15), 
                 legend.title = element_text(size = 15), 
-                legend.spacing.y = unit(0.2, 'cm'), 
+                # legend.spacing.y = unit(0.2, 'cm'), 
                 legend.key.height = unit(0.3, 'cm'), legend.key.width = unit(0.3, 'cm'))+
         theme(legend.position="none") # remove legend
     print(p)
