@@ -255,7 +255,7 @@ draw_boxplot<-function(df.use,feature,class_label,is_scale=FALSE){
         geom_jitter(width = 0.1,aes_string(color=class_label))+
         # stat_compare_means()+
         stat_compare_means(method = "wilcox.test", label = "p.format", label.x.npc = 0.5,
-                        label.y = max(df.use[[feature]]) + 0.2,size=8) +
+                        label.y = max(df.use[[feature]]) + 0.2,size=6) +
         theme_bw() +
         labs(x = "", y = "Normalized", title = feature,color='') +
         theme(axis.title.x = element_text(size = 17, hjust = 0.5, face = "plain"),

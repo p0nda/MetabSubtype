@@ -73,6 +73,11 @@ dim(df.raw_metab.scaled)
 ```
 
 ```{r}
+mean(df.raw_metab.scaled[,1])
+mean(as.numeric(df.raw_metab.scaled[1,]))
+```
+
+```{r}
 
 df.name_map=read.csv("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_name_map.csv", header= TRUE, check.names=F)
 df.path.metab <- read.csv('/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_hsa_pathway_map.csv', header = T)
@@ -99,6 +104,8 @@ for (col in colnames(df.cluster_result)){
 }
 ```
 
+# Heatmap
+
 ```{r}
 
 df.use=merge(df.raw_metab.scaled,df.cluster_result,by="row.names")
@@ -111,6 +118,8 @@ p_cutoff=5e-2
 df.use=df.use[order(df.use[[class_label]]),]
 df.use[class_label]
 draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',p_cutoff,FALSE )
+draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',1,FALSE )
+
 # draw_single_heatmap(df.use,metab_num,'nmf_2_clusters',p_cutoff,FALSE )
 ```
 

@@ -73,9 +73,36 @@ df.raw_metab.scaled=df.raw_metab.log
 raw_metab_mean=apply(df.raw_metab.log,1,mean)
 raw_metab_std=apply(df.raw_metab.log,1,sd)
 df.raw_metab.scaled=(df.raw_metab.scaled-raw_metab_mean)/raw_metab_std
+# df.raw_metab.scaled=scale(df.raw_metab.log, center = TRUE, scale = TRUE)
+
 # df.raw_metab.scaled=as.data.frame(nneg(as.matrix(df.raw_metab.scaled),method='min'))
+
 colnames(df.raw_metab.scaled)
 dim(df.raw_metab.scaled)
+```
+
+```{r}
+df.raw_metab.scaled=scale(df.raw_metab.log, center = TRUE, scale = TRUE)
+# 
+# df.raw_metab.log=log2(df.raw_metab)
+# df.raw_metab.scaled=df.raw_metab.log
+# raw_metab_mean=apply(df.raw_metab.log,2,mean)
+# raw_metab_std=apply(df.raw_metab.log,2,sd)
+# df.raw_metab.scaled=(df.raw_metab.scaled-raw_metab_mean)/raw_metab_std
+
+mean(df.raw_metab.scaled[, 1])
+mean(as.numeric(df.raw_metab.scaled[1, ]))
+first_col_df <- data.frame(Metabolite = df.raw_metab.scaled[, 5])
+first_row_df <- data.frame(Metabolite = as.numeric(df.raw_metab.scaled[5, ]))
+
+# Plot the distribution of the first column
+ggplot(first_col_df, aes(x = Metabolite)) +
+  geom_density(fill = "blue", alpha = 0.5) +  # Density plot
+  labs(title = "Distribution of the First Column", x = "Values", y = "Density")
+
+ggplot(first_row_df, aes(x = Metabolite)) +
+  geom_density(fill = "red", alpha = 0.5) +  # Density plot
+  labs(title = "Distribution of the First Row", x = "Values", y = "Density")
 ```
 
 ## Consensus Clustering
@@ -120,7 +147,7 @@ df.metab.pca=as.data.frame(nneg(as.matrix(df.metab.pca),method='min'))
 ##### Draw ######
 class_label='kmeans_2_clusters'
 df.use_sample=df.sample
-df.use=merge(df.raw_metab,df.cluster_result[,class_label,drop=FALSE],by="row.names")
+df.use=merge(df.raw_metab.scaled,df.cluster_result[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
@@ -128,6 +155,9 @@ volcano.test.results=pvalue_by_wilcox(df.use,metab_num,class_label)
 
 type1='1'
 type2='2'
+mean(df.use[which(df.use[class_label] == type2)][,1])
+mean(df.use[which(df.use[class_label] == type1)][,1])
+df.use
 volcano.test.results$FC=apply(df.use[,1:metab_num], 2, 
                               function(x) 
                                 mean(as.numeric(x[which(df.use[class_label] == type2)]))/
@@ -192,7 +222,7 @@ df.cluster_result.correction
 
 ## Survival Test
 
-```{r fig.height=6, fig.width=8}
+```{r fig.height=6, fig.width=10}
 
 df.use=df.metab.pca
 
@@ -216,7 +246,7 @@ surv_object=Surv(df.use.os[[time_label_col]],df.use.os[[event_label_col]])
 # K-MEANS
 kmeans_fit=survfit(surv_object~kmeans_2_clusters,data=df.use.os)
 kmeans_plot=ggsurvplot(kmeans_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
-pdf("~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/lipid_kmeans_survival.pdf")
+# pdf("~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/lipid_kmeans_survival.pdf")
 # ggsave(file="~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/lipid_kmeans_survival.pdf",print(kmeans_plot)) # It's not working. Why?
 print(kmeans_plot$plot,newpage = FALSE)
 # NMF
@@ -225,7 +255,7 @@ nmf_plot=ggsurvplot(nmf_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
 # nmf_plot
 # Combine
 arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,pval = TRUE,title=toupper(time_label_col))
-dev.off()
+# dev.off()
 
 ```
 
@@ -312,7 +342,7 @@ arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,p
 
 class_label='kmeans_2_clusters'
 df.use_sample=df.cluster_result
-df.use=merge(df.raw_metab.scaled,df.cluster_result.correction[,class_label,drop=FALSE],by="row.names")
+df.use=merge(df.raw_metab,df.cluster_result.correction[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
@@ -381,11 +411,18 @@ lipo.bubble %>%
 # dev.off()
 ```
 
+```{r}
+lipo.bubble %>%
+  # filter(lipid_class %in% c('Cer','Hex','LPC','LPE','SM','PC','PE','PG','PI','PS','TAG','DAG','TG')) %>%
+  filter(lipid_class %in% c('Cer')) %>%
+  arrange(desc(`log2FC`),desc(`FDR`)) 
+```
+
 ## Boxplot
 
 ```{r}
 class_label='kmeans_2_clusters'
-df.grep_lipid=get_grep_df(df.raw_metab.scaled,metab_num)
+df.grep_lipid=get_grep_df(df.raw_metab,metab_num)
 use_num=ncol(df.grep_lipid)
 df.use=merge(df.grep_lipid,df.cluster_result.correction[,c(class_label),drop=FALSE],by="row.names")
 rownames(df.use)=df.use[[1]]
@@ -407,14 +444,14 @@ df.use[class_label]
 # draw_boxplot(df.use,significant_headgroups[2],class_label)
 # draw_boxplot(df.use,headgroups[1],class_label)
 
-significant_headgroups=c('Cer','TG','LPC')
+significant_headgroups=c('Cer','TG','PS','PG')
 
 for (headgroup in significant_headgroups){
   filepath.box_plot=paste0("lipid_",headgroup,"_boxplot.pdf")
-  pdf(filepath.box_plot)
+  # pdf(filepath.box_plot)
   draw_boxplot(df.use,headgroup,class_label,is_scale=TRUE)
 
-  dev.off()
+  # dev.off()
 }
 
 ```
