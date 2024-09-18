@@ -20,7 +20,7 @@ library(viridis)
 library(survminer)
 library(survival)
 library(gridExtra)
-
+library(factoextra)
 
 getwd()
 source('~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/utils.R')
@@ -77,7 +77,6 @@ df.raw_metab.scaled=(df.raw_metab.scaled-raw_metab_mean)/raw_metab_std
 
 # df.raw_metab.scaled=as.data.frame(nneg(as.matrix(df.raw_metab.scaled),method='min'))
 
-colnames(df.raw_metab.scaled)
 dim(df.raw_metab.scaled)
 ```
 
@@ -137,6 +136,10 @@ df.metab.pca=pca.lipid$x
 using_num=49
 df.metab.pca=df.metab.pca[,1:using_num]
 df.metab.pca=as.data.frame(nneg(as.matrix(df.metab.pca),method='min'))
+
+fviz_eig(pca.lipid, addlabels = TRUE,ncp=10)
+
+
 ```
 
 # Bubble Fig
@@ -265,7 +268,8 @@ arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,p
 df.sample_cluster=merge(df.sample,df.cluster_result.correction,by="row.names")
 row.names(df.sample_cluster)=df.sample_cluster[[1]]
 df.sample_cluster=df.sample_cluster[,2:ncol(df.sample_cluster)]
-filepath.cluster='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240815/lipid_cluster_1e-2.csv'
+filepath.cluster='~/workstation/MetabSubtype/tasks/Subtype/data/lipid/cluster_result.csv'
+df.cluster_result.correction
 #
 # write.csv(df.sample_cluster,filepath.cluster)
 #
@@ -331,6 +335,28 @@ nmf_plot=ggsurvplot(nmf_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
 # nmf_plot
 # Combine
 arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,pval = TRUE,title=toupper(time_label_col))
+
+```
+
+```{r fig.height=6, fig.width=10}
+
+##### Survival #####
+df.use.os=merge(df.cluster_result.correction,df.sample[,c('os','oss','rfs','rfss')],by='row.names')
+df.use.os=df.use.os[order(df.use.os[[time_label_col]]),,drop=FALSE]
+
+surv_object=Surv(df.use.os[['os']],df.use.os[['oss']])
+
+# OS
+surv_object=Surv(df.use.os[['os']],df.use.os[['oss']])
+kmeans_fit=survfit(surv_object~kmeans_2_clusters,data=df.use.os)
+kmeans_plot=ggsurvplot(kmeans_fit, data = df.use.os,pval = TRUE,risk.table = TRUE,title='OS')
+# RFS
+surv_object=Surv(df.use.os[['rfs']],df.use.os[['rfss']])
+nmf_fit=survfit(surv_object~kmeans_2_clusters,data=df.use.os)
+nmf_plot=ggsurvplot(nmf_fit, data = df.use.os,pval = TRUE,risk.table = TRUE,title='RFS')
+# nmf_plot
+# Combine
+arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,pval = TRUE)
 
 ```
 
@@ -444,7 +470,7 @@ df.use[class_label]
 # draw_boxplot(df.use,significant_headgroups[2],class_label)
 # draw_boxplot(df.use,headgroups[1],class_label)
 
-significant_headgroups=c('Cer','TG','PS','PG')
+significant_headgroups=c('Cer','TG','PS','PG','PE')
 
 for (headgroup in significant_headgroups){
   filepath.box_plot=paste0("lipid_",headgroup,"_boxplot.pdf")
