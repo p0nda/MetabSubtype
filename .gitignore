@@ -166,3 +166,5 @@ tasks/MultiOmics/results/20240515/rna_dds.pkl
 # *.pdf
 
 .Rproj.user
+tasks/MultiOmics/data/.DS_Store
+.DS_Store
