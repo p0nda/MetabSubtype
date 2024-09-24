@@ -1,0 +1,21 @@
+methylcysteine
+guanine
+leucine-isoleucine
+phenylalanine
+4-phosphopantothenate
+s-adenosyl-l-homocysteine_pos
+acetyllysine
+cdp-choline
+glycerophosphocholine
+glutathione disulfide_pos
+acetoacetate
+7-methylguanosine
+fructose-1,6-bisphosphate
+histidine
+2-hydroxygluterate
+deoxyribose-phosphate
+creatinine
+asparagine
+methionine
+purine
+s-adenosyl-l-homocysteine_neg

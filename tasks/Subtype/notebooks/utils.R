@@ -497,6 +497,20 @@ draw_single_heatmap<-function(df.raw,feature_num,class_label,pvalue_cutoff=0.05,
 
 ##### KEGG #####
 
+get_symbols<-function(kegg_table_row){
+  gene_ids=unlist(strsplit(kegg_table_row[['geneID']],'[/]'))
+  gene_ids
+  keytypes(org.Hs.eg.db)
+  symbols=bitr(gene_ids, #数据集
+               fromType="ENTREZID", #输入为SYMBOL格式
+               toType="SYMBOL",  # 转为ENTERZID格式
+               OrgDb="org.Hs.eg.db") #人类 数据库
+  symbols=symbols[['SYMBOL']]
+  return(paste(symbols,collapse = '/'))
+  
+}
+
+
 kegg_before_process<-function(df.test,metab_num,class_label,types=c()){
     df.test.results=data.frame(Metabolites = (colnames(df.test)[1:metab_num]))
     # df.test.results$cpd_id=df.new$cpd_id[match(df.test.results$Metabolites,df.new$query)]

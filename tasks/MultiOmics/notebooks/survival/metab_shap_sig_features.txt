@@ -1,0 +1,20 @@
+5-methyl-thf
+fructose-1,6-bisphosphate
+methionine
+acetyllysine
+hydroxyproline
+glutathione disulfide_neg
+guanine
+adenosine
+glycerophosphocholine
+s-adenosyl-l-homocysteine_neg
+dl-pipecolic acid
+4-aminobutyrate
+taurine
+uridine
+dtmp_neg
+aconitate
+s-ribosyl-l-homocysteine_neg
+succinate
+guanosine
+cyclic-amp
