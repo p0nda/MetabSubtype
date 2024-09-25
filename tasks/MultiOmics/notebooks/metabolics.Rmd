@@ -81,8 +81,8 @@ mean(as.numeric(df.raw_metab.scaled[1,]))
 
 df.name_map=read.csv("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_name_map.csv", header= TRUE, check.names=F)
 df.path.metab <- read.csv('/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_hsa_pathway_map.csv', header = T)
-df.name_map=read.csv("G:/repositories/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_name_map.csv", header= TRUE, check.names=F)
-df.path.metab <- read.csv('G:/repositories/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_hsa_pathway_map.csv', header = T)
+df.name_map=read.csv("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_name_map.csv", header= TRUE, check.names=F)
+df.path.metab <- read.csv('/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_hsa_pathway_map.csv', header = T)
 df.path.metab=df.path.metab[1:3206,]
 df.path.metab=df.path.metab[!(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
 # df.path.metab[(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
@@ -125,6 +125,109 @@ draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',1,FALSE )
 
 # KEGG
 
+## Upregulated
+
+```{r}
+
+# Relabel Codex
+class_label="kmeans_2_clusters"
+df.use_sample=df.cluster_result
+df.use_sample=df.use_sample[!is.na(df.use_sample[class_label]),]
+
+df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+# 假设你的数据框是 loaddata，行是基因，列是样本
+# df.sample_cluster 包含样本的聚类信息
+cluster2_samples <- df.use$kmeans_2_clusters == 2
+cluster1_samples <- df.use$kmeans_2_clusters == 1
+
+
+# Calculate mean
+mean_expr_cluster1 <- colMeans(df.use[cluster1_samples, 1:(ncol(df.use)-1)],na.rm=TRUE)
+mean_expr_cluster2 <- colMeans(df.use[cluster2_samples,1:(ncol(df.use)-1)] ,na.rm=TRUE)
+
+diff_expr <- mean_expr_cluster2 /mean_expr_cluster1
+
+upregulated_genes <- colnames(df.use[,1:(ncol(df.use)-1)])[abs(diff_expr) > 1]
+
+# upregulated_genes <- colnames(loaddata)[abs(diff_expr) > 1]
+
+# 输出上调基因的列表
+upregulated_genes
+```
+
+```{r}
+
+
+df.new=df.path.metab[df.path.metab$cpd_id %in% df.name_map$KEGG,]
+df.new$query=NA
+df.new$query=df.name_map$compound[match(df.new$cpd_id, df.name_map$KEGG)]
+df.new[df.new=='']=NA
+
+
+# Relabel Codex
+class_label="kmeans_2_clusters"
+df.use_sample=df.cluster_result
+df.use_sample=df.use_sample[!is.na(df.use_sample[class_label]),]
+
+df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+pvalue_cutoff=5
+fc_up_cutoff=1
+fc_down_cutoff=1
+
+df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('1','2'))
+df.test.results.mt2=df.test.results.mt2[df.test.results.mt2$log2FC>0,]
+kegg_table=kegg_after_process(df.test.results.mt2,pvalue_cutoff,fc_up_cutoff,fc_down_cutoff)
+kegg_table
+
+
+# Draw Table
+kegg_table_draw=kegg_table
+
+unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
+kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+
+pathway_names=unique(kegg_table_draw$Description)
+
+kegg_table_draw[kegg_table_draw['FDR']<=5e-2,c('Description','pvalue','query')]
+kegg_table_draw
+
+# Figure using FDR as X
+kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
+# kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-10):nrow(kegg_table_draw),]
+# dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
+# write.csv(kegg_table,paste0(dirpath,'metab_pathway.csv',collapse = '/'))
+
+kegg_table_draw$FDR
+p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(3, 15), breaks = c(seq(0,10,2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(1,3,0.5)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+print(p)
+write.csv(kegg_table,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240924_external_genes/metab_up_kegg.csv")
+kegg_table
+```
+
+### All
+
 ```{r}
 
 dim(df.path.metab)
@@ -146,9 +249,11 @@ df.use_sample=df.use_sample[!is.na(df.use_sample[class_label]),]
 df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
-pvalue_cutoff=5e-2
-fc_up_cutoff=1.2
-fc_down_cutoff=1.2
+
+# Upregulated
+pvalue_cutoff=5 
+fc_up_cutoff=1
+fc_down_cutoff=1
 df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('1','2'))
 
 kegg_table=kegg_after_process(df.test.results.mt2,pvalue_cutoff,fc_up_cutoff,fc_down_cutoff)
