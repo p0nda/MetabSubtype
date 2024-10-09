@@ -20,6 +20,8 @@ library(survival)
 library(mixOmics)
 library(patchwork)
 
+install.packages("tidyverse")
+
 packageVersion("rlang")    #查看指定R包版本
 R.version
 getwd()

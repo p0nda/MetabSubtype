@@ -67,7 +67,7 @@ df.raw_metab.scaled=df.raw_metab.log
 raw_metab_mean=apply(df.raw_metab.log,1,mean)
 raw_metab_std=apply(df.raw_metab.log,1,sd)
 df.raw_metab.scaled=(df.raw_metab.scaled-raw_metab_mean)/raw_metab_std
-df.raw_metab.scaled=as.data.frame(nneg(as.matrix(df.raw_metab.scaled),method='min'))
+# df.raw_metab.scaled=as.data.frame(nneg(as.matrix(df.raw_metab.scaled),method='min'))
 colnames(df.raw_metab.scaled)
 dim(df.raw_metab.scaled)
 ```
@@ -175,13 +175,14 @@ df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
-pvalue_cutoff=5
-fc_up_cutoff=1
+pvalue_cutoff=5e-2
+fc_up_cutoff=1.5
 fc_down_cutoff=1
 
-df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('1','2'))
+df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('2','1'))
+# Key process to control upregulate
 df.test.results.mt2=df.test.results.mt2[df.test.results.mt2$log2FC>0,]
-kegg_table=kegg_after_process(df.test.results.mt2,pvalue_cutoff,fc_up_cutoff,fc_down_cutoff)
+kegg_table.up=kegg_after_process(df.test.results.mt2,pvalue_cutoff,fc_up_cutoff,fc_down_cutoff)
 kegg_table
 
 
@@ -222,7 +223,76 @@ p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
         legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
 
 print(p)
-write.csv(kegg_table,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240924_external_genes/metab_up_kegg.csv")
+# write.csv(kegg_table,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240924_external_genes/metab_up_kegg.csv")
+kegg_table
+```
+
+```{r}
+
+df.new=df.path.metab[df.path.metab$cpd_id %in% df.name_map$KEGG,]
+df.new$query=NA
+df.new$query=df.name_map$compound[match(df.new$cpd_id, df.name_map$KEGG)]
+df.new[df.new=='']=NA
+
+
+# Relabel Codex
+class_label="kmeans_2_clusters"
+df.use_sample=df.cluster_result
+df.use_sample=df.use_sample[!is.na(df.use_sample[class_label]),]
+
+df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+pvalue_cutoff=5e-2
+fc_up_cutoff=1.5
+fc_down_cutoff=1
+
+df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('2','1'))
+# Key process to control upregulate
+df.test.results.mt2=df.test.results.mt2[df.test.results.mt2$log2FC<0,]
+kegg_table.down=kegg_after_process(df.test.results.mt2,pvalue_cutoff,fc_up_cutoff,fc_down_cutoff)
+kegg_table
+
+
+# Draw Table
+kegg_table_draw=kegg_table
+
+unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
+kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+
+pathway_names=unique(kegg_table_draw$Description)
+
+kegg_table_draw[kegg_table_draw['FDR']<=5e-2,c('Description','pvalue','query')]
+kegg_table_draw
+
+# Figure using FDR as X
+kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
+# kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-10):nrow(kegg_table_draw),]
+# dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
+# write.csv(kegg_table,paste0(dirpath,'metab_pathway.csv',collapse = '/'))
+
+kegg_table_draw$FDR
+p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(3, 15), breaks = c(seq(0,10,2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(1,3,0.5)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+print(p)
+# write.csv(kegg_table,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240924_external_genes/metab_down_kegg.csv")
 kegg_table
 ```
 
@@ -261,7 +331,6 @@ kegg_table
 
 # Draw Table
 kegg_table_draw=kegg_table
-
 unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
 kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
 names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
@@ -298,6 +367,46 @@ p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
 print(p)
 # write.csv(kegg_table,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/metab_kegg.csv")
 kegg_table
+```
+
+## Combination and Bubble
+
+```{r}
+
+kegg_table.up$comporison="II"
+kegg_table.down$comporison="I"
+
+# I upregulated too much
+kegg_table.down=kegg_table.down[order(kegg_table.down$pvalue,decreasing = TRUE),]
+kegg_table.down=kegg_table.down[(nrow(kegg_table.down)-3):nrow(kegg_table.down),]
+# II upregulated too much
+kegg_table.up=kegg_table.up[order(kegg_table.up$pvalue,decreasing = TRUE),]
+kegg_table.up=kegg_table.up[(nrow(kegg_table.up)-6):nrow(kegg_table.up),]
+
+kegg_table.up_down=rbind(kegg_table.up,kegg_table.down)
+kegg_table_draw=kegg_table.up_down
+unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
+kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+p=ggplot(kegg_table_draw, aes(comporison, Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(3, 18), breaks = c(seq(0,10,2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(1,3,0.5)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+pdf('~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/metab_I_II_upregulated.pdf',12,10)
+print(p)
+dev.off()
 ```
 
 # Mean Aggregate
@@ -580,11 +689,96 @@ dim(volcano.test.results[volcano.test.results$pvalue<5e-2,])
 dim(volcano.test.results[(volcano.test.results$pvalue<5e-2)&(abs(volcano.test.results$log2FC)>log2(1.4)),])
 ##标记上调下调
 pvalue_cutoff=5e-2
-fc_up_cutoff=1.2
+fc_up_cutoff=1.5
 fc_down_cutoff=1/fc_up_cutoff
 
-draw_volcano(volcano.test.results,pvalue_cutoff,fc_up_cutoff)
 
+volcano.test.results.sig=volcano.test.results[(volcano.test.results$pvalue<=5e-2)&((volcano.test.results$FC>=fc_up_cutoff)|(volcano.test.results$FC<=fc_down_cutoff)),]
+volcano.test.results.sig$Metabolites
+```
+
+## Volcano Rename
+
+```{r}
+
+# 代谢物简称对照表
+metabolite_map <- list(
+  "3-phosphoglycerate" = "3-PG",
+  "5-methyl-thf" = "5-MTHF",
+  "6-phospho-d-gluconate" = "6PG",
+  "acetoacetate" = "AcAc",
+  "acetyllysine" = "AcLys",
+  "adenine" = "Ade",
+  "alanine" = "Ala",
+  "amp" = "AMP",
+  "cdp-choline" = "CDP-Choline",
+  "cholesterol sulfate" = "Chol-SO4",
+  "citrulline" = "Cit",
+  "coenzyme a" = "CoA",
+  "cyclic-amp" = "cAMP",
+  "cystathionine" = "cystathionine",
+  "cytidine" = "Cyd",
+  "cytosine" = "Cyt",
+  "damp" = "dAMP",
+  "dcmp" = "dCMP",
+  "deoxyguanosine" = "dGuo",
+  "d-erythrose-4-phosphate" = "E4P",
+  "d-glyceraldehyde-3-phosphate" = "G3P",
+  "d-sedoheptulose-1-7-phosphate" = "S7P",
+  "dtmp_neg" = "dTMP",
+  "dump" = "dUMP",
+  "fructose-1,6-bisphosphate" = "F1,6BP",
+  "fructose-6-phosphate" = "F6P",
+  "glucose-1-phosphate" = "G1P",
+  "glucose-6-phosphate" = "G6P",
+  "gmp" = "GMP",
+  "guanidoacetic acid" = "GAA",
+  "hexose-phosphate" = "HexP",
+  "homocysteine" = "Hcy",
+  "hydroxyproline" = "Hyp",
+  "imp" = "IMP",
+  "kynurenine" = "Kyn",
+  "n-acetyl-glucosamine-1-phosphate" = "GlcNAc-1P",
+  "nicotinamide ribotide" = "NMN",
+  "o-acetyl-l-serine" = "O-Ac-Ser",
+  "pantothenate" = "Pant",
+  "phenyllactic acid" = "PhLA",
+  "phosphoenolpyruvate" = "PEP",
+  "quinolinate" = "QA",
+  "s-adenosyl-l-homocysteine_neg" = "SAH",
+  "s-adenosyl-l-homocysteine_pos" = "SAH",
+  "s-adenosyl-l-methionine" = "SAM",
+  "sarcosine" = "Sar",
+  "threonine" = "Thr",
+  "uridine" = "Urd"
+)
+
+# 读取代谢物文件
+# metabolite_file <- "path_to_your_metabolite_file.txt"
+# metabolites <- readLines(metabolite_file)
+
+# 匹配代谢物名称
+standardized_metabolites <- sapply(volcano.test.results$Metabolites, function(met) {
+  if (met %in% names(metabolite_map)) {
+    return(metabolite_map[[met]])
+  } else {
+    return(met)  # 如果找不到则保留原名称
+  }
+})
+
+# 输出匹配结果
+volcano.test.results$std_Metabolites=sapply(volcano.test.results$Metabolites, function(met) {
+  if (met %in% names(metabolite_map)) {
+    return(metabolite_map[[met]])
+  } else {
+    return(met)  # 如果找不到则保留原名称
+  }
+})
+
+
+pdf("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/metab_volcano.pdf")
+draw_volcano(volcano.test.results,pvalue_cutoff,fc_up_cutoff,use_std=TRUE)
+dev.off()
 ```
 
 # CPD Line

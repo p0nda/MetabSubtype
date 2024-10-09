@@ -704,7 +704,7 @@ meta_result_process<-function(raw_result_df){
 
 ##### Volcano #####
 
-draw_volcano<-function(volcano.test.results,pvalue_cutoff,fc_up_cutoff){
+draw_volcano<-function(volcano.test.results,pvalue_cutoff,fc_up_cutoff,use_std=FALSE){
     fc_down_cutoff=1/fc_up_cutoff
         
     volcano.test.results <- volcano.test.results %>% 
@@ -713,12 +713,15 @@ draw_volcano<-function(volcano.test.results,pvalue_cutoff,fc_up_cutoff){
                                     TRUE ~ "Not significant"))
 
     ##加上标记
+    if(use_std){
+      volcano.test.results $Metabolites=volcano.test.results$std_Metabolites
+    }
     volcano.test.results$relabel <- NA
     volcano.test.results$relabel[volcano.test.results$Expression == "Up"] <- volcano.test.results $Metabolites[volcano.test.results$Expression == "Up"]
     volcano.test.results$relabel[volcano.test.results$Expression == "Down"] <- volcano.test.results $Metabolites[volcano.test.results$Expression == "Down"]
     head(volcano.test.results)
     # write.table(volcano.test.results, file="lipid_tissue_M.csv", sep=',', col.names=T)
-
+    
     ##画图
     xlim_cutoff=max(abs(log2(min(volcano.test.results$FC))),abs(log2(max(volcano.test.results$FC))))
     p1=ggplot(volcano.test.results, aes(log2FC, -log(pvalue,10), fill = Expression, label=relabel)) +  

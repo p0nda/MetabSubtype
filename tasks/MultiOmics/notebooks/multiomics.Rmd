@@ -1,0 +1,422 @@
+```{r}
+library(stringr)
+# library(eoffice)
+library(dplyr)
+library(ComplexHeatmap)
+library(ggplot2)
+# library(rJava)
+# library(xlsx)
+library(RColorBrewer)
+library(circlize)
+library(umap)
+library(Rtsne)
+library(ggrepel)
+library(ggplot2)
+library(clusterProfiler)
+library(KEGGREST)
+# library(ConsensusClusterPlus)
+library(viridis)
+library(survminer)
+library(survival)
+library(mixOmics)
+library(patchwork)
+
+library(limma)
+library(edgeR)
+library(DESeq2)
+
+library(enrichplot) # 用于绘制富集图
+
+library('org.Hs.eg.db')
+
+
+source('~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/utils.R')
+source("~/workstation/MetabSubtype/tasks/Subtype/notebooks/utils.R")
+```
+
+# Prepare Data
+
+## Read Data
+
+```{r}
+
+filepath.raw_counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/rna/counts.csv'
+filepath.sample='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/Using/sample.csv'
+filepath.cluster_result.metab='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/metab/cluster_result.csv'
+filepath.cluster_result.lipid='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/lipid/cluster_result.csv'
+
+df.raw_counts<-read.csv(filepath.raw_counts, header= TRUE, check.names=F,row.names=1)
+df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
+df.cluster_result.metab<-read.csv(filepath.cluster_result.metab, header= TRUE, check.names=F,row.names=1)
+df.cluster_result.lipid<-read.csv(filepath.cluster_result.lipid, header= TRUE, check.names=F,row.names=1)
+
+df.raw_counts[1:5,1:5]
+dim(df.raw_counts)
+length(unique((df.raw_counts[,1])))
+unique(df.raw_counts[,1])
+df.raw_counts[,1]
+df.raw_counts[df.raw_counts=='']=NA
+
+# Sample DF Process
+df.sample[df.sample=='']=NA
+df.sample[df.sample=='Neg']=NA
+df.sample=df.sample[!is.na(df.sample['Sample Name']),]
+df.sample['Sample Name']
+row.names(df.sample)=df.sample[['Sample Name']]
+df.sample[match('1520',rownames(df.sample)),'oss']=0
+# df.sample=df.sample[!is.na(df.sample['Sample Name']),c('Sample Name','主要分型','生存时间分组','MT2结构')]
+dim(df.sample)
+# df.sample=df.sample[rownames(df.raw_counts),]
+# df.sample=na.omit(df.sample,'all')
+dim(df.cluster_result)
+df.raw_counts[,ncol(df.raw_counts),drop=FALSE]
+
+```
+
+# Metab
+
+## Norm
+
+```{r}
+df.sample_cluster=merge(df.sample,df.cluster_result[,'kmeans_2_clusters',drop=FALSE],by.x="Sample Name",by.y="row.names",all=TRUE)
+df.using=merge(df.raw_counts,df.cluster_result.metab,by="row.names")
+rownames(df.using)=df.using[,1]
+df.using=df.using[,2:ncol(df.using)]
+x.raw_counts=df.using[,1:ncol(df.raw_counts)]
+x.cluster_result=df.using[,(ncol(df.raw_counts)+1):ncol(df.using)]
+for (col in colnames(x.cluster_result)){
+  x.cluster_result[col]=as.factor(x.cluster_result[[col]])
+}
+
+class_label='kmeans_2_clusters'
+group=factor(x.cluster_result[[class_label]])
+batch=factor(x.cluster_result[['batch']])
+length(group)
+
+```
+
+```{r}
+dge <- DGEList(counts=t(x.raw_counts), group=group)
+
+# 计算样本的归一化因子
+dge <- calcNormFactors(dge)
+
+# 使用voom对数据进行预处理
+design <- model.matrix(~group)
+v <- voom(dge, design)
+
+# 使用 removeBatchEffect 去除批次效应
+v$E <- removeBatchEffect(v$E, batch=batch, design=design)
+
+# 后续可以使用limma进行差异表达分析
+fit <- lmFit(v, design)
+fit <- eBayes(fit)
+
+dim(v$E)
+v_corrected.metab=as.data.frame(t(v$E))
+
+rna_num=ncol(v_corrected.metab)
+```
+
+## KEGG
+
+### Up
+
+```{r}
+colnames(v_corrected.metab)[ncol(v_corrected.metab)]
+df.use_sample=df.cluster_result.metab
+df.use_sample=df.use_sample[!is.na(df.use_sample[class_label]),]
+
+df.use=merge(v_corrected.metab,df.use_sample[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+
+pvalue_cutoff=5e-2
+fc_up_cutoff=1
+fc_down_cutoff=1
+
+df.test.results.metab=kegg_before_process(df.use,rna_num,class_label,types=c('2','1'))
+```
+
+```{r}
+# 
+# write.csv(df.test.results.metab,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/rna_metab_test.csv")
+
+```
+
+```{r}
+test = bitr(df.test.results.metab$Metabolites, #数据集
+  fromType="ENSEMBL", #输入为SYMBOL格式
+  toType="ENTREZID",  # 转为ENTERZID格式
+  OrgDb="org.Hs.eg.db")
+test$ensemble
+
+df.test.results.metab=merge(df.test.results.metab,test,by.x='Metabolites',by.y='ENSEMBL')
+```
+
+```{r}
+
+logfc_cutoff=log2(2)
+pvalue_cutoff=5e-2
+df.test.results.metab$is_use=(df.test.results.metab$wilcox_BH<=pvalue_cutoff)&(abs(df.test.results.metab$log2FC)>=logfc_cutoff)
+ensemble.sig=rownames(df.test.results.metab[df.test.results.metab$is_use,])
+length(ensemble.sig)
+
+df.test.results.metab.up=df.test.results.metab[df.test.results.metab$log2FC>0,]
+df.test.results.metab.down=df.test.results.metab[df.test.results.metab$log2FC<0,]
+
+dim(df.test.results.metab.up)
+dim(df.test.results.metab.down)
+```
+
+```{r}
+
+
+used_entrz_ids=df.test.results.metab.up[df.test.results.metab.up$is_use,'ENTREZID']
+
+# print(paste0('used up rna number is ',length(used_entrz_ids[!is.na(used_entrz_ids)]),' out of ',length(used_ens_ids)))
+
+kegg_result=enrichKEGG(
+  used_entrz_ids,
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  use_internal_data = FALSE
+)
+kegg_table <- na.omit(as.data.frame(kegg_result))
+
+kegg_table$FoldEnrich <- apply(kegg_table, 1, 
+                               function(x) as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[1])/
+                                 as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+kegg_table$symbol=apply(kegg_table,1,get_symbols)
+
+# Generate Draw Table
+kegg_table_draw=kegg_table
+unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
+kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+
+pathway_names=unique(kegg_table_draw$Description)
+
+kegg_table_draw
+
+# Figure using FDR as X
+kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
+kegg_table_draw
+kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-min((nrow(kegg_table_draw)-1),7)):nrow(kegg_table_draw),]
+dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
+# write.csv(kegg_table.mt2,paste0(dirpath,'counts_pathway_up.csv',collapse = '/'))
+
+kegg_table_draw$FDR
+kegg_table_draw$FoldEnrich
+
+# Up
+kegg_table_draw$comporison='UP'
+kegg_table_draw.up=kegg_table_draw
+p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(5, 12), breaks = c(seq(3,10,2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(2,8,2)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "RNA Upregulated", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+# pdf(paste(dirpath,'rna_counts_up.pdf',sep = ''),12,7)
+print(p)
+```
+
+```{r}
+used_entrz_ids[!is.na(used_entrz_ids)]
+test = bitr(used_entrz_ids[!is.na(used_entrz_ids)], #数据集
+  fromType="ENTREZID", #输入为SYMBOL格式
+  toType="SYMBOL",  # 转为ENTERZID格式
+  OrgDb="org.Hs.eg.db")
+# write.csv(test,'~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/rna_down_up_list.csv')
+```
+
+```{r}
+
+
+used_entrz_ids=df.test.results.metab.down[df.test.results.metab.down$is_use,'ENTREZID']
+
+kegg_result=enrichKEGG(
+  used_entrz_ids,
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  use_internal_data = FALSE
+)
+kegg_table <- na.omit(as.data.frame(kegg_result))
+kegg_table <- kegg_table[kegg_table$Count > 2,]
+
+# kegg_table$metabs_mean <- apply(kegg_table, 1, path_avelog2FC,df.test.results=df.test.results)
+# calculate fold enrichment
+kegg_table[1:5,3:8]
+dim(kegg_table)
+kegg_table$FoldEnrich <- apply(kegg_table, 1, 
+                               function(x) as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[1])/
+                                 as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+kegg_table$symbol=apply(kegg_table,1,get_symbols)
+
+# Generate Draw Table
+kegg_table_draw=kegg_table
+unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
+kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+
+pathway_names=unique(kegg_table_draw$Description)
+
+kegg_table_draw
+
+# Figure using FDR as X
+kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
+kegg_table_draw=kegg_table_draw[max(1,(nrow(kegg_table_draw)-10)):nrow(kegg_table_draw),]
+# dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
+# write.csv(kegg_table.mt2,paste0(dirpath,'counts_pathway_down.csv',collapse = '/'))
+
+kegg_table_draw$FDR
+kegg_table_draw$FoldEnrich
+
+# Down
+kegg_table_draw$comporison='DOWN'
+kegg_table_draw.down=kegg_table_draw
+
+p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(3, 15), breaks = c(seq(1,3,0.2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(10,17,2)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "RNA Downregulated", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+# pdf(paste(dirpath,'rna_counts_up.pdf',sep = ''),12,7)
+print(p)
+```
+
+### Combine
+
+```{r}
+
+kegg_table_draw.all=rbind(kegg_table_draw.up,kegg_table_draw.down)
+kegg_table_draw.all=kegg_table_draw.all[order(kegg_table_draw.all$pvalue,decreasing = TRUE),]
+
+
+# Up/Down
+p=ggplot(kegg_table_draw.all, aes(comporison, Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw.all[['Description']])+
+  scale_size(range = c(3, 12), breaks = c(3,5,7,8)) +
+# scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(2,30,4))) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  coord_fixed(ratio = 0.4) +
+  labs(x = "", y = "", title = "", 
+       fill = "Abs.Log2 (FC)", size = "-Log10 (P-value)") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+
+pdf('~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/rna_metab_I_II_upregulated.pdf',12,10)
+print(p)
+dev.off()
+```
+
+```{r}
+write.csv(kegg_table_draw.all,'~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/rna_metab_kegg.csv')
+```
+
+## GSEA
+
+```{r}
+GSEA(entriz_id)
+df = read.csv("drosphila_example_de.csv", header=TRUE)
+
+```
+
+```{r}
+foldchanges=df.test.results.metab[,'FC']
+names(foldchanges)=df.test.results.metab[,'ENTREZID']
+# gene_list<-na.omit(gene_list)
+gene_list=foldchanges
+gene_list = sort(gene_list, decreasing = TRUE)
+
+kk2=gseKEGG(gene_list,organism = 'hsa',nPerm=1000,pvalueCutoff = 1)
+length(gene_list)
+```
+
+```{r}
+df.kk2=as.data.frame(kk2)
+df.kk2=df.kk2[order(abs(df.kk2$enrichmentScore)),]
+gseaplot(kk2, by = "runningScore", title = kk2$Description[1], geneSetID = 1)
+head(kk2)
+gseaplot2(kk2,  title = "Viral protein interaction with cytokine and cytokine receptor", geneSetID = 3)
+
+pathways_es_ordered=df.kk2[order(df.kk2$NES,decreasing=TRUE),"Description"]
+which(kk2$Description==pathways_es_ordered[1])
+
+order_num=4
+gseaplot2(kk2,  title = pathways_es_ordered[order_num], geneSetID = which(kk2$Description==pathways_es_ordered[order_num]))
+
+```
+
+```{r}
+df.kk2=df.kk2[order(df.kk2$pvalue,decreasing = FALSE),]
+df.kk2.draw=df.kk2[1:20,]
+df.kk2.draw=df.kk2.draw[order(df.kk2.draw$pvalue,decreasing = TRUE),]
+ggplot(df.kk2.draw, aes(-log10(pvalue), Description)) +
+  geom_point(aes(fill = -log10(pvalue), size = enrichmentScore), color = "black", shape = 21) +
+  scale_y_discrete(limits = df.kk2.draw[['Description']])+
+  scale_size(range = c(5, 12), breaks = c(seq(0.2,0.6,0.1))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(0,5,2)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "RNA Upregulated", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+```
+
+```{r}
+
+dotplot(kk2, showCategory=10) + ggtitle("dotplot for GSEA")
+write.csv(df.kk2,'~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/gsea_metab.csv')
+```
