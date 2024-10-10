@@ -119,9 +119,15 @@ p_cutoff=5e-2
 df.use=df.use[order(df.use[[class_label]]),]
 df.use[class_label]
 
-filepath=paste0(dirpath,'metab_all.pdf')
+filepath=paste0(dirpath,'metab_sig_heatmap.pdf')
+pdf(filepath)
 draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',p_cutoff,FALSE )
+dev.off()
+
+filepath=paste0(dirpath,'metab_all_heatmap.pdf')
+pdf(filepath)
 draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',1,FALSE )
+dev.off()
 
 # draw_single_heatmap(df.use,metab_num,'nmf_2_clusters',p_cutoff,FALSE )
 ```
@@ -726,7 +732,7 @@ metabolite_map <- list(
   "dcmp" = "dCMP",
   "deoxyguanosine" = "dGuo",
   "d-erythrose-4-phosphate" = "E4P",
-  "d-glyceraldehyde-3-phosphate" = "G3P",
+  "d-glyceraldehdye-3-phosphate" = "G3P",
   "d-sedoheptulose-1-7-phosphate" = "S7P",
   "dtmp_neg" = "dTMP",
   "dump" = "dUMP",
@@ -1087,7 +1093,10 @@ surv_object=Surv(df.use.os[[time_label_col]],df.use.os[[event_label_col]])
 # K-MEANS
 kmeans_fit=survfit(surv_object~kmeans_2_clusters,data=df.use.os)
 kmeans_plot=ggsurvplot(kmeans_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
-kmeans_plot
+filepath=paste0(dirpath,'metab_os.pdf')
+pdf(filepath)
+print(kmeans_plot)
+dev.off()
 # NMF
 # nmf_fit=survfit(surv_object~nmf_2_clusters,data=df.use.os)
 # nmf_plot=ggsurvplot(nmf_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
