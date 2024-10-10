@@ -8,6 +8,8 @@ library(ggplot2)
 # library(xlsx)
 # library(RColorBrewer)
 library(circlize)
+library(ConsensusClusterPlus)
+
 library(umap)
 library(Rtsne)
 library(ggrepel)
@@ -27,7 +29,7 @@ source('utils.R')
 set.seed(6)
 
 df.raw_metab=df.metab[,1:metab_num]
-d
+
 # Odd Chain
 dim(df.raw_metab)
 df.raw_metab=drop_odd_chain_cols(df.raw_metab)
@@ -53,7 +55,7 @@ order(df.sample[['os']])
 df.raw_metab.scaled
 # Consensus 
 # setwd("D:/repositories/liver-cancer-tasks/Tissue/results/20240406/")
-# rcc = ConsensusClusterPlus(data.matrix(df.raw_metab.scaled), 
+rcc = ConsensusClusterPlus(data.matrix(df.raw_metab.scaled),
                            maxK = 8, 
                            reps = 1000, 
                            pItem = 0.8, 

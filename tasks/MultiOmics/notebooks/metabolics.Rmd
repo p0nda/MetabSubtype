@@ -22,8 +22,9 @@ library(survival)
 
 
 getwd()
-source('G:/repositories/MetabSubtype/tasks/MultiOmics/notebooks/utils.R')
 source("~/workstation/MetabSubtype/tasks/Subtype/notebooks/utils.R")
+
+dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/'
 ```
 
 ```{r}
@@ -117,6 +118,8 @@ p_cutoff=5e-2
 
 df.use=df.use[order(df.use[[class_label]]),]
 df.use[class_label]
+
+filepath=paste0(dirpath,'metab_all.pdf')
 draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',p_cutoff,FALSE )
 draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',1,FALSE )
 

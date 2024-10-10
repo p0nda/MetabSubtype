@@ -391,6 +391,13 @@ which(kk2$Description==pathways_es_ordered[1])
 order_num=4
 gseaplot2(kk2,  title = pathways_es_ordered[order_num], geneSetID = which(kk2$Description==pathways_es_ordered[order_num]))
 
+description_name='TNF signaling pathway'
+p=gseaplot2(kk2,  title = kk2$Description[which(kk2$Description==description_name)], geneSetID = which(kk2$Description==description_name))
+
+filepath_name=paste0('~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/gsea_',description_name,'.pdf')
+pdf(filepath_name)
+print(p)
+dev.off()
 ```
 
 ```{r}
@@ -406,7 +413,7 @@ ggplot(df.kk2.draw, aes(-log10(pvalue), Description)) +
   #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
   theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
   # coord_fixed(ratio = 0.4) +
-  labs(x = "-Log10(FDR)", y = "", title = "RNA Upregulated", 
+  labs(x = "-Log10(FDR)", y = "", title = "RNA GSEA", 
        fill = "-Log10(FDR)", size = "Enrich Ratio") +
   theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
         axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
