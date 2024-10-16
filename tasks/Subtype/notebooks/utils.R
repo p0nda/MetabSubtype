@@ -116,7 +116,7 @@ get_kegg_metabs=function(metab_list){
 }
 get_ms_metabs=function(metab_list){
   search_result=c()
-  target_db=colnames(df.raw_metab)
+  target_db=gsub("(_neg|_pos)$", "", colnames(df.raw_metab))
   search_metabolite='inosine'
   for (search_metabolite in metab_list){
     if (length(grep(paste('\\b',search_metabolite,'\\b',sep=''),target_db,ignore.case = TRUE))==0){

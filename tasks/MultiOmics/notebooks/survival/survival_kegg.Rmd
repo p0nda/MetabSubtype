@@ -1,0 +1,330 @@
+```{r}
+library(NMF)
+library(stringr)
+# library(eoffice)
+library(dplyr)
+library(ComplexHeatmap)
+library(ggplot2)
+# library(rJava)
+# library(xlsx)
+# library(RColorBrewer)
+library(circlize)
+library(umap)
+library(Rtsne)
+library(ggrepel)
+library(ggplot2)
+library(clusterProfiler)
+library(KEGGREST)
+# library(ConsensusClusterPlus)
+library(viridis)
+library(survminer)
+library(survival)
+
+
+getwd()
+source("~/workstation/MetabSubtype/tasks/Subtype/notebooks/utils.R")
+```
+
+# Prepare Data
+
+```{r}
+##### Metab #####
+LABEL_NUM=0
+filepath.metab='~/workstation/MetabSubtype/tasks/Subtype/data/Using/metab.csv'
+filepath.sample='~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/survival/chemical_sample.csv'
+filepath.cluster_result='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/metab/cluster_result.csv'
+
+# filepath.cluster_result='G:/repositories/MetabSubtype/tasks/MultiOmics/data/metab/cluster_result.csv'
+# filepath.metab='G:/repositories/MetabSubtype/tasks/Subtype/data/Using/metab.csv'
+# filepath.sample='G:/repositories/MetabSubtype/tasks/Subtype/data/Using/sample.csv'
+
+df.cluster_result<-read.csv(filepath.cluster_result, header= TRUE, check.names=F,row.names=1)
+df.metab<-read.csv(filepath.metab, header= TRUE, check.names=F,row.names=1)
+df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
+
+df.metab=df.metab[,colnames(df.metab)!="s-adenosyl-l-homocysteine_pos"]
+df.metab[1:5,1:5]
+dim(df.metab)
+length(unique((df.metab[,1])))
+unique(df.metab[,1])
+df.metab[,1]
+df.metab[df.metab=='']=NA
+df.sample[df.sample=='']=NA
+df.sample[df.sample=='Neg']=NA
+# df.sample=df.sample[!is.na(df.sample['Sample Name']),c('Sample Name','主要分型','生存时间分组','MT2结构')]
+df.sample=df.sample[!is.na(df.sample['Sample Name']),]
+df.sample['Sample Name']
+row.names(df.sample)=df.sample[['Sample Name']]
+df.sample=df.sample[rownames(df.metab),]
+df.sample[match('1520',rownames(df.sample)),'oss']=0
+dim(df.metab)
+metab_num=ncol(df.metab)
+df.raw_metab=df.metab[,1:metab_num]
+dim(df.sample)
+dim(merge(df.metab,df.sample,by.x="row.names",by.y="Sample Name"))
+
+
+# Normalize Data
+df.raw_metab.log=log2(df.raw_metab)
+df.raw_metab.scaled=df.raw_metab.log
+raw_metab_mean=apply(df.raw_metab.log,1,mean)
+raw_metab_std=apply(df.raw_metab.log,1,sd)
+df.raw_metab.scaled=(df.raw_metab.scaled-raw_metab_mean)/raw_metab_std
+# df.raw_metab.scaled=as.data.frame(nneg(as.matrix(df.raw_metab.scaled),method='min'))
+colnames(df.raw_metab.scaled)
+dim(df.raw_metab.scaled)
+dim(df.sample)
+```
+
+```{r}
+
+df.name_map=read.csv("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_name_map.csv", header= TRUE, check.names=F)
+df.path.metab <- read.csv('/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_hsa_pathway_map.csv', header = T)
+df.name_map=read.csv("/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_name_map.csv", header= TRUE, check.names=F)
+df.path.metab <- read.csv('/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/kegg/kegg_hsa_pathway_map.csv', header = T)
+df.path.metab=df.path.metab[1:3206,]
+df.path.metab=df.path.metab[!(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
+# df.path.metab[(df.path.metab$pathway_name %in% c('Vitamin B6 metabolism - Homo sapiens (human)','Thiamine metabolism - Homo sapiens (human)','Terpenoid backbone biosynthesis - Homo sapiens (human)')),]
+df.path.metab$pathway_name=str_replace(df.path.metab$pathway_name,' - Homo sapiens \\(human\\)','')
+dim(df.path.metab)
+dim(df.name_map)
+df.new=df.path.metab[df.path.metab$cpd_id %in% df.name_map$KEGG,]
+df.new$query=NA
+df.new$query=df.name_map$compound[match(df.new$cpd_id, df.name_map$KEGG)]
+df.new[df.new=='']=NA
+head(df.new)
+df.new$pathway_id=as.character(df.new$pathway_id)
+df.new$cpd_id=as.character(df.new$cpd_id)
+df.new$query=as.character(df.new$query)
+str(df.new)
+
+for (col in colnames(df.cluster_result)){
+  df.cluster_result[col]=as.factor(df.cluster_result[[col]])
+}
+```
+
+## Read Metabolites
+
+```{r}
+
+src_dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/survival/'
+# 读取三个文件并合并
+metabolites.shap <- readLines(paste0(src_dirpath,"metab_shap_sig_features.txt"))
+metabolites.stat <- readLines(paste0(src_dirpath,"metab_stat_sig_features.txt"))
+metabolites.shared <- readLines(paste0(src_dirpath,"metab_shared_sig_features.txt"))
+
+# 合并到一个向量
+all_metabolites <- c(metabolites.shap, metabolites.stat, metabolites.shared)
+all_metabolites=unique(all_metabolites)
+all_metabolites=all_metabolites[all_metabolites!='s-adenosyl-l-homocysteine_pos']
+```
+
+## Preprocess
+
+```{r}
+
+df.raw_metab.scaled=df.raw_metab.scaled[,all_metabolites]
+df.metab=df.metab[,all_metabolites]
+df.raw_metab=df.raw_metab[,all_metabolites]
+
+metab_num=length(all_metabolites)
+
+df.sample=df.sample[!is.na(df.sample$`Sample Name`),]
+df.sample$survival_level=ifelse(df.sample$os>=24,'high','low')
+
+dim(df.sample)
+```
+
+# Heatmap
+
+```{r}
+
+class_label='survival_level'
+df.use=merge(df.raw_metab.scaled,df.sample[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+dim(df.use)
+p_cutoff=1
+
+df.use=df.use[order(df.use[[class_label]]),]
+df.use[class_label]
+df.use=df.use[,c(all_metabolites,class_label)]
+# filepath=paste0(dirpath,'metab_sig_heatmap.pdf')
+# pdf(filepath)
+draw_single_heatmap(df.use,length(all_metabolites),class_label,p_cutoff,FALSE)
+# dev.off()
+
+```
+
+# KEGG
+
+```{r}
+
+
+df.new=df.path.metab[df.path.metab$cpd_id %in% df.name_map$KEGG,]
+df.new$query=NA
+df.new$query=df.name_map$compound[match(df.new$cpd_id, df.name_map$KEGG)]
+df.new[df.new=='']=NA
+
+
+# Relabel Codex
+class_label="survival_level"
+df.use_sample=df.sample
+df.use_sample=df.sample[!is.na(df.sample[class_label]),]
+
+df.use=merge(df.raw_metab,df.sample[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+pvalue_cutoff=1
+fc_up_cutoff=1
+fc_down_cutoff=1
+
+df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('high','low'))
+# Key process to control upregulate
+df.test.results.mt2=df.test.results.mt2[df.test.results.mt2$log2FC>0,]
+kegg_table=kegg_after_process(df.test.results.mt2,pvalue_cutoff,fc_up_cutoff,fc_down_cutoff)
+kegg_table
+
+
+# Draw Table
+kegg_table_draw=kegg_table
+
+unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
+kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+
+pathway_names=unique(kegg_table_draw$Description)
+
+kegg_table_draw[kegg_table_draw['FDR']<=5e-2,c('Description','pvalue','query')]
+kegg_table_draw
+
+# Figure using FDR as X
+kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
+
+
+kegg_table_draw$FDR
+p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(3, 15), breaks = c(seq(0,10,2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(0,2,0.5)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+print(p)
+# write.csv(kegg_table,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240924_external_genes/metab_up_kegg.csv")
+kegg_table
+```
+
+## up
+
+```{r}
+
+df.new=df.path.metab[df.path.metab$cpd_id %in% df.name_map$KEGG,]
+df.new$query=NA
+df.new$query=df.name_map$compound[match(df.new$cpd_id, df.name_map$KEGG)]
+df.new[df.new=='']=NA
+
+
+# Relabel Codex
+class_label="survival_level"
+df.use_sample=df.sample
+df.use_sample=df.sample[!is.na(df.sample[class_label]),]
+
+df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+pvalue_cutoff=5
+fc_up_cutoff=1
+fc_down_cutoff=1
+dim(df.use)
+df.test.results=kegg_before_process(df.use,metab_num,class_label,types=c('high','low'))
+df.test.results[df.test.results$wilcox<5e-2,]
+# Key process to control upregulate
+df.test.results.up=df.test.results[df.test.results$log2FC>0,]
+df.test.results.down=df.test.results[df.test.results$log2FC<0,]
+
+kegg_table.up=kegg_after_process(df.test.results.up,pvalue_cutoff,fc_up_cutoff,fc_down_cutoff)
+kegg_table.down=kegg_after_process(df.test.results.down,pvalue_cutoff,fc_up_cutoff,fc_down_cutoff)
+
+# Draw Table
+kegg_table_draw.up=kegg_table.up
+kegg_table_draw.down=kegg_table.down
+
+kegg_draw_process<-function(kegg_table_draw){
+  unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
+  kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+  names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+  
+  pathway_names=unique(kegg_table_draw$Description)
+  
+  kegg_table_draw[kegg_table_draw['FDR']<=5e-2,c('Description','pvalue','query')]
+  return(kegg_table_draw)
+  }
+
+kegg_table_draw.up=kegg_draw_process(kegg_table_draw.up)
+kegg_table_draw.down=kegg_draw_process(kegg_table_draw.down)
+
+```
+
+## Up
+
+```{r}
+p=ggplot(kegg_table_draw.up, aes(-log10(FDR), Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(3, 15), breaks = c(seq(0,10,2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(0,2,0.5)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+print(p)
+
+```
+
+```{r}
+kegg_table_draw.up$comporison='high'
+kegg_table_draw.down$comporison='low'
+
+kegg_table_draw.all=rbind(kegg_table_draw.up,kegg_table_draw.down)
+
+p=ggplot(kegg_table_draw.all, aes(comporison, Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(3, 15), breaks = c(seq(0,10,2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(1,3,0.5)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+print(p)
+```

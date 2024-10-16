@@ -27,6 +27,8 @@ source("~/workstation/MetabSubtype/tasks/Subtype/notebooks/utils.R")
 dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/'
 ```
 
+# Metab
+
 ```{r}
 ##### Metab #####
 LABEL_NUM=0
@@ -41,6 +43,8 @@ filepath.cluster_result='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/dat
 df.cluster_result<-read.csv(filepath.cluster_result, header= TRUE, check.names=F,row.names=1)
 df.metab<-read.csv(filepath.metab, header= TRUE, check.names=F,row.names=1)
 df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
+
+df.metab=df.metab[,colnames(df.metab)!="s-adenosyl-l-homocysteine_pos"]
 df.metab[1:5,1:5]
 dim(df.metab)
 length(unique((df.metab[,1])))
@@ -184,8 +188,8 @@ df.use=merge(df.raw_metab,df.use_sample[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
-pvalue_cutoff=5e-2
-fc_up_cutoff=1.5
+pvalue_cutoff=5
+fc_up_cutoff=1
 fc_down_cutoff=1
 
 df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('2','1'))
@@ -196,7 +200,7 @@ kegg_table
 
 
 # Draw Table
-kegg_table_draw=kegg_table
+kegg_table_draw=kegg_table.up
 
 unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
 kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
@@ -232,7 +236,7 @@ p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
         legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
 
 print(p)
-# write.csv(kegg_table,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240924_external_genes/metab_up_kegg.csv")
+# write.csv(kegg_table.up,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240924_external_genes/metab_up_kegg.csv")
 kegg_table
 ```
 
@@ -265,7 +269,7 @@ kegg_table
 
 
 # Draw Table
-kegg_table_draw=kegg_table
+kegg_table_draw=kegg_table.down
 
 unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
 kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
@@ -301,7 +305,7 @@ p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
         legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
 
 print(p)
-# write.csv(kegg_table,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240924_external_genes/metab_down_kegg.csv")
+# write.csv(kegg_table.down,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240924_external_genes/metab_down_kegg.csv")
 kegg_table
 ```
 
@@ -330,9 +334,9 @@ row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
 # Upregulated
-pvalue_cutoff=5 
+pvalue_cutoff=5e-2
 fc_up_cutoff=1
-fc_down_cutoff=1
+fc_down_cutoff=1/1
 df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('1','2'))
 
 kegg_table=kegg_after_process(df.test.results.mt2,pvalue_cutoff,fc_up_cutoff,fc_down_cutoff)
@@ -437,7 +441,7 @@ pathway_matrix[,c('kmeans_2_clusters','amp')]
 ```{r}
 
 ##### Mean Aggregate #####  
-dirpath="~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/Metab/Mean/"
+dirpath="~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/metab_pathway_heatmap/"
 # setwd(dirpath)
 class_label='kmeans_2_clusters'
 df.use_sample=df.sample
@@ -469,6 +473,7 @@ pvalue_cutoff=1
 use_row_ha=FALSE
 col_split=TRUE
 pathway_names=unique(kegg_table$Description)
+pathway_name=pathway_names[8]
 for (pathway_name in pathway_names){
   # Get Pathway CPDs
   metabs.kegg.tca=df.new[df.new$pathway_name==pathway_name,'query']
@@ -1122,5 +1127,12 @@ nmf_plot=ggsurvplot(nmf_fit, data = df.use.os,pval = TRUE,risk.table = TRUE,titl
 # nmf_plot
 # Combine
 arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,pval = TRUE)
+
+```
+
+# Percentage
+
+```{r}
+
 
 ```
