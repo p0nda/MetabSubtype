@@ -1,4 +1,4 @@
-library(NMF)
+
 library(stringr)
 # library(eoffice)
 library(dplyr)
@@ -21,11 +21,15 @@ library(survival)
 library(gridExtra)
 library(factoextra)
 
+source('/home/suh/workstation/MetabSubtype/tasks/MultiOmics/notebooks/utils.R')
 
 ##### Prepare Data ######
 
-filepath.metab='~/workstation/MetabSubtype/tasks/Subtype/data/Using/lipid.csv'
-filepath.sample='~/workstation/MetabSubtype/tasks/Subtype/data/Using/sample.csv'
+filepath.metab='/home/suh/workstation/MetabSubtype/tasks/Subtype/data/Using/lipid.csv'
+filepath.sample='/home/suh/workstation/MetabSubtype/tasks/Subtype/data/Using/sample.csv'
+filepath.cluster_result.lipid='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/lipid/cluster_result.csv'
+
+df.cluster_result.lipid<-read.csv(filepath.cluster_result.lipid, header= TRUE, check.names=F,row.names=1)
 df.metab<-read.csv(filepath.metab, header= TRUE, check.names=F,row.names=1)
 dim(df.metab)
 df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
@@ -54,8 +58,7 @@ metab_num=dim(df.raw_metab)[2]
 
 ##### Build DF #####
 class_label='kmeans_2_clusters'
-df.use_sample=df.cluster_result
-df.use=merge(df.raw_metab,df.cluster_result.correction[,class_label,drop=FALSE],by="row.names")
+df.use=merge(df.raw_metab,df.cluster_result.lipid[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
