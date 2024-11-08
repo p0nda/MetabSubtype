@@ -50,15 +50,6 @@ dim(df.raw_metab)
 df.raw_metab=drop_odd_chain_cols(df.raw_metab)
 dim(df.raw_metab)
 metab_num=dim(df.raw_metab)[2]
-# Normalize Data
-df.raw_metab.log=log2(df.raw_metab)
-df.raw_metab.scaled=df.raw_metab.log
-raw_metab_mean=apply(df.raw_metab.log,1,mean)
-raw_metab_std=apply(df.raw_metab.log,1,sd)
-df.raw_metab.scaled=(df.raw_metab.scaled-raw_metab_mean)/raw_metab_std
-# df.raw_metab.scaled=scale(df.raw_metab.log, center = TRUE, scale = TRUE)
-
-# df.raw_metab.scaled=as.data.frame(nneg(as.matrix(df.raw_metab.scaled),method='min'))
 
 
 ##### Build DF #####
