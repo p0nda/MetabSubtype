@@ -1,0 +1,1492 @@
+```{r}
+library(stringr)
+# library(eoffice)
+library(dplyr)
+library(ComplexHeatmap)
+library(ggplot2)
+# library(rJava)
+# library(xlsx)
+library(RColorBrewer)
+library(circlize)
+library(umap)
+library(Rtsne)
+library(ggrepel)
+library(ggplot2)
+library(clusterProfiler)
+library(KEGGREST)
+# library(ConsensusClusterPlus)
+library(viridis)
+library(survminer)
+library(survival)
+library(mixOmics)
+library(patchwork)
+
+library(limma)
+library(edgeR)
+library(DESeq2)
+library('org.Hs.eg.db')
+
+
+source('~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/utils.R')
+source("~/workstation/MetabSubtype/tasks/Subtype/notebooks/utils.R")
+```
+
+# Prepare Data
+
+## Read
+
+```{r}
+
+##### Metab #####
+# filepath.rna_counts='D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/lipid.csv'
+filepath.raw_counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/rna/counts.csv'
+filepath.sample='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/Using/sample.csv'
+filepath.cluster_result='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/metab/cluster_result.csv'
+df.raw_counts<-read.csv(filepath.raw_counts, header= TRUE, check.names=F,row.names=1)
+df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
+df.cluster_result<-read.csv(filepath.cluster_result, header= TRUE, check.names=F,row.names=1)
+df.raw_counts[1:5,1:5]
+dim(df.raw_counts)
+length(unique((df.raw_counts[,1])))
+unique(df.raw_counts[,1])
+df.raw_counts[,1]
+df.raw_counts[df.raw_counts=='']=NA
+
+# Sample DF Process
+df.sample[df.sample=='']=NA
+df.sample[df.sample=='Neg']=NA
+df.sample=df.sample[!is.na(df.sample['Sample Name']),]
+df.sample['Sample Name']
+row.names(df.sample)=df.sample[['Sample Name']]
+df.sample[match('1520',rownames(df.sample)),'oss']=0
+# df.sample=df.sample[!is.na(df.sample['Sample Name']),c('Sample Name','主要分型','生存时间分组','MT2结构')]
+dim(df.sample)
+# df.sample=df.sample[rownames(df.raw_counts),]
+# df.sample=na.omit(df.sample,'all')
+dim(df.cluster_result)
+df.raw_counts[,ncol(df.raw_counts),drop=FALSE]
+df.sample_cluster=merge(df.sample,df.cluster_result[,4,drop=FALSE],by.x="Sample Name",by.y="row.names",all=TRUE)
+```
+
+```{r}
+ENSG00000187472
+df.raw_counts[,ncol(df.raw_counts),drop=FALSE]
+```
+
+```{r}
+df.using=merge(df.raw_counts,df.cluster_result,by="row.names")
+rownames(df.using)=df.using[,1]
+df.using=df.using[,2:ncol(df.using)]
+x.raw_counts=df.using[,1:ncol(df.raw_counts)]
+x.cluster_result=df.using[,(ncol(df.raw_counts)+1):ncol(df.using)]
+for (col in colnames(x.cluster_result)){
+  x.cluster_result[col]=as.factor(x.cluster_result[[col]])
+}
+str(x.cluster_result)
+
+class_label='kmeans_2_clusters'
+group=factor(x.cluster_result[[class_label]])
+batch=factor(x.cluster_result[['batch']])
+```
+
+## Filter
+
+```{r}
+# smallestGroupSize=min(nrow(df.sample[df.sample['kmeans_2_clusters']==1,]),nrow(df.sample[df.sample['kmeans_2_clusters']==2,]))
+# keep_cols=colnames(df.raw_counts)[colSums(df.raw_counts>20)>=smallestGroupSize]
+# df.raw_counts=df.raw_counts[,keep_cols]
+# metab_num=ncol(df.raw_counts)
+# metab_num
+# df.raw_counts
+```
+
+## Norm
+
+```{r}
+
+df.sample$batch=1
+df.sample[str_detect(rownames(df.sample), "T"),'batch']=2
+df.sample$batch
+
+
+```
+
+#### Batch Effect
+
+```{r}
+var.data <- apply(df.raw_counts, 2, var)
+df.raw_counts[,var.data==0]
+df.raw_counts[is.na(df.raw_counts)]
+batch=df.sample$batch
+df.rna.combat=ComBat(dat=t(df.raw_counts), batch=batch, par.prior=TRUE, prior.plots=TRUE)
+
+# non-parametric adjustment, mean-only version
+combat_edata2 = ComBat(dat=edata, batch=batch, mod=NULL, par.prior=FALSE, mean.only=TRUE)
+
+# reference-batch version, with covariates
+combat_edata3 = ComBat(dat=edata, batch=batch, mod=mod, par.prior=TRUE, ref.batch=3)
+ 
+
+```
+
+# edgeR Process
+
+## Prepare Data
+
+### Preprocess
+
+```{r}
+df.using=merge(df.raw_counts,df.cluster_result,by="row.names")
+rownames(df.using)=df.using[,1]
+df.using=df.using[,2:ncol(df.using)]
+x.raw_counts=df.using[,1:ncol(df.raw_counts)]
+x.cluster_result=df.using[,(ncol(df.raw_counts)+1):ncol(df.using)]
+for (col in colnames(x.cluster_result)){
+  x.cluster_result[col]=as.factor(x.cluster_result[[col]])
+}
+
+class_label='kmeans_2_clusters'
+group=factor(x.cluster_result[[class_label]])
+batch=factor(x.cluster_result[['batch']])
+length(group)
+```
+
+```{r}
+dge <- DGEList(counts=t(x.raw_counts), group=group)
+
+# 计算样本的归一化因子
+dge <- calcNormFactors(dge)
+
+# 使用voom对数据进行预处理
+design <- model.matrix(~group)
+v <- voom(dge, design)
+
+# 使用 removeBatchEffect 去除批次效应
+v$E <- removeBatchEffect(v$E, batch=batch, design=design)
+
+# 后续可以使用limma进行差异表达分析
+fit <- lmFit(v, design)
+fit <- eBayes(fit)
+
+dim(v$E)
+v_corrected.edger=as.data.frame(t(v$E))
+rna_num=ncol(v_corrected.edger)
+```
+
+```{r}
+dge=DGEList(t(x.raw_counts),group=group)
+keep.exprs <- filterByExpr(dge)
+dge <- dge[keep.exprs, , keep.lib.sizes = FALSE]
+dge <- calcNormFactors(dge,method='TMM')
+dge
+
+```
+
+```{r}
+
+df.cpm=as.data.frame(t(cpm(dge)))
+df.lcpm=cpm(dge,log=TRUE)
+dim(cpm(dge))
+dim(dge)
+
+design <- model.matrix(~ batch + group)
+dge <- estimateDisp(dge, design)
+
+```
+
+```{r}
+# Test for DGE output
+df.cpm.test1=cpm(dge$counts)
+df.cpm.test2=df.cpm
+dim(df.cpm.test1)
+dim(df.cpm.test2)
+identical(df.cpm.test1,df.cpm.test2)
+as.data.frame(df.cpm.test1)
+as.data.frame(df.cpm.test2)
+
+```
+
+```{r}
+# Test Log Fold Change
+mean(as.numeric(dge$counts[which(dge$samples$group == 2)]))/
+mean(as.numeric(dge$counts[which(dge$samples$group == 1)]))
+log2(1.224168)
+df.normed=t(as.data.frame(dge$counts/dge$samples$norm.factors))
+df.cpm.normed=t(as.data.frame(df.cpm))
+mean(as.numeric(df.normed[which(dge$samples$group == 2),'ENSG00000000003']))/
+mean(as.numeric(df.normed[which(dge$samples$group == 1),'ENSG00000000003']))
+mean(as.numeric(df.cpm.normed[which(dge$samples$group == 2),'ENSG00000000003']))/
+mean(as.numeric(df.cpm.normed[which(dge$samples$group == 1),'ENSG00000000003']))
+log2(1.314362)
+df.lcpm.normed=t(as.data.frame(df.lcpm))
+mean(as.numeric(df.lcpm.normed[which(dge$samples$group == 2),'ENSG00000000003']))/
+mean(as.numeric(df.lcpm.normed[which(dge$samples$group == 1),'ENSG00000000003']))
+log2(1.201203)
+
+dim(df.normed)
+```
+
+### Delete Non-coding Genes
+
+```{r}
+keytypes(org.Hs.eg.db)
+all_genes=colnames(df.raw_counts)
+test = bitr(all_genes, #数据集
+  fromType="ENSEMBL", #输入为SYMBOL格式
+  toType="SYMBOL",  # 转为ENTERZID格式
+  OrgDb="org.Hs.eg.db") #人类 数据库
+head(test,2)
+dim(test)
+# Patterns to match
+patterns <- c('.+-P$', '.+-AS', '\\d{4,}', '^(MI|AC|LINC)', 'RNU-')
+
+# Check if column matches any patterns
+keep.symbols <- character()
+
+for (symbol in test[['SYMBOL']]) {
+  if (!any(sapply(patterns, function(p) str_detect(symbol, p)))) {
+    keep.symbols <- c(keep.symbols, test[test$SYMBOL==symbol,'ENSEMBL'])
+  }
+}
+length(keep.symbols)
+df.cpm.coding=df.cpm[,keep.symbols]
+dim(df.cpm.coding)
+```
+
+### Check Batch and Data
+
+```{r}
+df.raw=draw_df
+target_col='batch'
+using_num=ncol(df.cpm.coding)
+figure_title='edgeR'
+figure_save_path=''
+
+
+```
+
+```{r}
+v <- voom(dge, design)
+v_corrected.edger=as.data.frame(t(v$E))
+str(v)
+
+df.counts.edge=as.data.frame(t(cpm(dge, normalized.lib.sizes = TRUE)))
+
+# Delete Batch Effect
+# v_corrected <- removeBatchEffect(v$E, batch = batch)
+# v_corrected=as.data.frame(t(v_corrected))
+
+```
+
+```{r}
+
+draw_df=merge(v_corrected,df.cluster_result[,'batch',drop=FALSE],by='row.names')
+rownames(draw_df)=draw_df[,1]
+draw_df=draw_df[,2:ncol(draw_df)]
+draw_df$batch=factor(draw_df$batch)
+draw_pca(draw_df,'batch',ncol(df.cpm.coding),'Limma','')
+draw_plsda(draw_df,'batch',ncol(df.cpm.coding),'Limma','')
+draw_df$batch
+
+type(draw_df$batch)
+```
+
+```{r}
+
+draw_df=merge(df.raw_counts[,intersect(colnames(df.raw_counts),colnames(df.cpm.coding))],df.cluster_result[,'batch',drop=FALSE],by='row.names')
+rownames(draw_df)=draw_df[,1]
+draw_df=draw_df[,2:ncol(draw_df)]
+draw_df$batch=factor(draw_df$batch)
+draw_pca(draw_df,'batch',ncol(draw_df)-1,'RAW','')
+draw_plsda(draw_df,'batch',ncol(draw_df)-1,'RAW','')
+draw_df$batch
+
+type(draw_df$batch)
+```
+
+### Save Data
+
+```{r}
+# write.csv(df.cpm.coding,"~/workstation/MetabSubtype/tasks/MultiOmics/data/rna/limma_cpm.csv",sep=',')
+# 
+# dim(df.cpm.coding)
+# test_df=read.csv("~/workstation/MetabSubtype/tasks/MultiOmics/data/rna/limma_cpm.csv",row.names = 1)
+# identical(df.cpm.coding,test_df)
+
+```
+
+## DE
+
+```{r}
+
+
+
+fit <- glmQLFit(dge, design)
+lrt <- glmLRT(fit, coef = 'group2')
+
+dim(topTags(lrt))
+
+lrt$table
+dim(lrt$table)
+```
+
+```{r}
+logfc_cutoff=1
+pvalue_cutoff=5e-2
+df.stat.edger=lrt$table
+df.sig.edger=df.stat.edger[(abs(df.stat.edger$logFC)>logfc_cutoff)&(df.stat.edger$PValue<pvalue_cutoff),]
+ensemble.sig.edger=rownames(df.sig.edger)
+length(ensemble.sig.edger)
+```
+
+```{r}
+for(gene_id in ensemble.sig.edger){
+  if(str_detect('.',gene_id)){
+    print(gene_id)
+  }
+}
+ensemble.sig.edger
+```
+
+### Test DE Result
+
+```{r}
+wilcox_foldchange <- function(data, group_labels) {
+  # Ensure the input is a data frame and group_labels is a factor
+  data <- as.data.frame(data)
+  group_labels <- as.factor(group_labels)
+  
+  # Initialize results data frame
+  results <- data.frame(
+    Feature = colnames(data),
+    FC = numeric(ncol(data)),
+    logFC = numeric(ncol(data)),
+    pvalue = numeric(ncol(data)),
+    FDR = numeric(ncol(data))
+  )
+  
+  # Loop through each feature (column)
+  for (i in seq_along(colnames(data))) {
+    feature <- data[, i]
+    
+    # Calculate fold change (FC)
+    group1_median <- mean(feature[group_labels == levels(group_labels)[2]])
+    group2_median <- mean(feature[group_labels == levels(group_labels)[1]])
+    FC <- group2_median / group1_median
+    logFC <- log2(FC)
+    
+    # Perform Wilcoxon rank-sum test
+    wilcox_test <- wilcox.test(feature ~ group_labels)
+    pvalue <- wilcox_test$p.value
+    
+    # Store the results
+    results[i, "FC"] <- FC
+    results[i, "logFC"] <- logFC
+    results[i, "pvalue"] <- pvalue
+  }
+  
+  # Adjust p-values for multiple testing (FDR)
+  results$FDR <- p.adjust(results$pvalue, method = "fdr")
+  
+  return(results)
+}
+
+
+```
+
+```{r}
+
+# df.result.test=wilcox_foldchange(v_corrected,group)
+df.result.test
+df.stat
+```
+
+### Heatmap
+
+```{r}
+v_corrected
+```
+
+```{r}
+# v_corrected=v_corrected+abs(min(v_corrected[v_corrected<=0]))+1
+# loaddata=merge(v_corrected,df.cluster_result,by="row.names")
+df.counts.edge=df.counts.edge+abs(min(df.counts.edge[df.counts.edge<=0]))+1
+loaddata=merge(log2(df.counts.edge),df.cluster_result,by="row.names")
+rownames(loaddata)=loaddata[,1]
+loaddata=loaddata[2:ncol(loaddata)]
+idx <- which(loaddata =='-Inf', arr.ind = TRUE)
+loaddata[idx]=0
+```
+
+```{r}
+class_label='batch'
+feature_cols=intersect(ensemble.sig,colnames(loaddata))
+draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE)
+print(length(feature_cols))
+```
+
+```{r}
+
+class_label='kmeans_2_clusters'
+
+feature_cols=intersect(ensemble.sig.edger,colnames(loaddata))
+draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE)
+draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE,FALSE)
+```
+
+```{r}
+loaddata
+length(feature_cols)
+```
+
+# DESeq2 Process
+
+## Build Dataset
+
+```{r}
+
+
+# Create the DESeqDataSet object
+dds <- DESeqDataSetFromMatrix(countData = as.data.frame(t(x.raw_counts)), colData = x.cluster_result, design = ~ batch + kmeans_2_clusters)
+nrow(df.cluster_result)
+# Filter lowly expressed genes
+smallestGroupSize=min(nrow(df.cluster_result[df.cluster_result$kmeans_2_clusters==1,]),nrow(df.cluster_result[df.cluster_result$kmeans_2_clusters==2,]))
+keep <- rowSums(counts(dds) >= 10) >= smallestGroupSize
+dds <- dds[keep,]
+nrow(dds)
+dds <- DESeq(dds)
+str(results(dds))
+
+```
+
+```{r}
+
+```
+
+## DE
+
+### Analysis
+
+```{r}
+as.data.frame(counts(dds, normalized = TRUE))
+```
+
+```{r}
+df.stat.deseq <- as.data.frame(results(dds)@listData)
+rownames(df.stat.deseq)=rownames(dds)
+
+logfc_cutoff=log2(2)
+pvalue_cutoff=1e-2
+df.sig.deseq=df.stat.deseq[(abs(df.stat.deseq$log2FoldChange)>logfc_cutoff)&(df.stat.deseq$padj<pvalue_cutoff),]
+ensemble.sig.deseq=rownames(df.sig.deseq)
+length(ensemble.sig.deseq)
+
+v_corrected.deseq=as.data.frame(t(assay(vst(dds,blind = FALSE))))
+norm_corrected.deseq=as.data.frame(t(counts(dds,norm=TRUE)))
+2**(v_corrected.deseq)
+```
+
+### Box Test
+
+```{r}
+test_df_1=rowSums(df.raw_counts)
+test_df_1=merge(test_df_1,df.sample,by='row.names')
+test_df_1$sample=as.factor(test_df_1[,1])
+ggplot(data=test_df_1,aes_string(x="MT2结构",y="x",color='MT2结构'))+geom_boxplot()+geom_jitter()+labs(y="RAW")
+test_df_2=rowSums(2**v_corrected.deseq)
+test_df_2=merge(test_df_2,df.sample,by='row.names')
+test_df_2$sample=as.factor(test_df_2[,1])
+ggplot(data=test_df_2,aes_string(x="MT2结构",y="x",color='MT2结构'))+geom_boxplot()+geom_jitter()+labs(y="Normed")
+test_df_3=rowSums(norm_corrected.deseq)
+test_df_3=merge(test_df_3,df.cluster_result,by='row.names')
+test_df_3$sample=as.factor(test_df_3[,1])
+ggplot(data=test_df_3,aes_string(x="kmeans_2_clusters",y="x",color='kmeans_2_clusters'))+geom_boxplot()
+```
+
+```{r}
+test_df_1=df.raw_counts
+test_df_1=merge(test_df_1,df.cluster_result,by='row.names')
+test_df_1$sample=as.factor(test_df_1[,1])
+test_df_1=test_df_1[,2:ncol(test_df_1)]
+test_df_1=test_df_1[order(test_df_1$ENSG00000000003,decreasing = TRUE),]
+rownames(test_df_1)=test_df_1$sample
+
+test_df_2=2**v_corrected.deseq
+test_df_2=test_df_2[rownames(test_df_1),]
+test_df_2$sample=rownames(test_df_2)
+
+plot1 <- ggplot(test_df_1, aes(x = sample, y = ENSG00000000003)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Barplot for df1", x = "Sample", y = "Value") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+# Barplot for df2
+plot2 <- ggplot(test_df_2, aes(x = sample, y = ENSG00000000003)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Barplot for df2", x = "Sample", y = "Value") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+# Arrange plots in an up and down layout
+grid.arrange(plot1, plot2, ncol = 1)
+```
+
+### Comparison with EdgeR
+
+```{r}
+df.stat.deseq
+df.stat.edger
+length(ensemble.sig.edger)
+length(ensemble.sig.deseq)
+length(intersect(ensemble.sig.deseq,ensemble.sig.edger))
+```
+
+### Heatmap
+
+#### Sample Info
+
+```{r}
+filepath.rna_counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/tmp/norm.csv'
+df.rna_counts<-read.csv(filepath.rna_counts, header= TRUE, check.names=F,row.names=1)
+df.rna_counts=as.data.frame(t(df.rna_counts))
+new_rownames=c()
+for (row_name in rownames(df.rna_counts)){
+  new_row_name=str_replace(row_name,"X","")
+  new_row_name=str_replace(new_row_name,"\\.","-")
+  print(new_row_name)
+  new_rownames=c(new_rownames,new_row_name)
+}
+rownames(df.rna_counts)=new_rownames
+```
+
+```{r}
+ensemble.sig.deseq=df.test.results[df.test.results$is_use,'ENSEMBL']
+```
+
+```{r}
+df.sample
+v_corrected.deseq=as.data.frame(t(assay(vst(dds,blind = FALSE))))
+v_corrected.deseq
+# v_corrected.deseq=v_corrected.deseq+abs(min(v_corrected[v_corrected.deseq<=0]))+1
+loaddata=merge(v_corrected.deseq,df.sample,by="row.names")
+rownames(loaddata)=loaddata[,1]
+loaddata=loaddata[2:ncol(loaddata)]
+idx <- which(loaddata =='-Inf', arr.ind = TRUE)
+loaddata[idx]=0
+```
+
+```{r}
+loaddata=merge(df.rna_counts,df.sample,by="row.names")
+rownames(loaddata)=loaddata[,1]
+loaddata=loaddata[2:ncol(loaddata)]
+idx <- which(loaddata =='-Inf', arr.ind = TRUE)
+loaddata[idx]=0
+
+```
+
+```{r}
+class_label='codex_new'
+# loaddata[class_label]=as.vector(loaddata[[class_label]])
+feature_cols=intersect(ensemble.sig.deseq,colnames(loaddata))
+draw_heatmap(loaddata[!is.na(loaddata[[class_label]]),],feature_cols,class_label,class_label,FALSE)
+print(length(feature_cols))
+
+```
+
+```{r}
+df.sample
+class_label='CODEX主要亚型'
+# loaddata[class_label]=as.vector(loaddata[[class_label]])
+feature_cols=intersect(ensemble.sig.deseq,colnames(loaddata))
+draw_heatmap(loaddata[!is.na(loaddata[[class_label]]),],feature_cols,class_label,class_label,FALSE)
+print(length(feature_cols))
+```
+
+#### MT2 Problem
+
+```{r}
+feature_cols=intersect(ensemble.sig.deseq,colnames(loaddata))
+test_df=loaddata[,feature_cols]
+test_df=rowSums(test_df)
+test_df=as.data.frame(test_df)
+test_df=merge(test_df,df.sample,by='row.names')
+rownames(test_df)=test_df[,1]
+test_df=test_df[2:ncol(test_df)]
+test_df$sample_id=rownames(test_df)
+ggplot(data=test_df,aes(x=t,y=os,color=MT2结构))+geom_boxplot()+ geom_jitter() 
+ggplot(data=test_df,aes(x=MT2结构,y=os,color=MT2结构))+geom_boxplot()+ geom_jitter()  
+
+```
+
+```{r}
+class_label='MT2结构'
+# loaddata[class_label]=as.vector(loaddata[[class_label]])
+feature_cols=intersect(ensemble.sig.deseq,colnames(loaddata))
+draw_heatmap(loaddata[!is.na(loaddata[[class_label]]),],feature_cols,class_label,class_label,FALSE)
+print(length(feature_cols))
+
+
+```
+
+```{r}
+tmp_draw_heatmap<-function(loaddata,feature_cols,class_label,ha_cols,use_row_ha=FALSE,col_split=TRUE){
+    candidate_colors <- c("#8ea3c2",  "#8ccdbf", "#edb17f",  "#f1df82","#FEA3A2","#8E8BFE")
+    # candidate_colors=c("#FEA3A2","#8E8BFE","#")
+    mat=data.matrix(loaddata[,feature_cols])
+    rownames(mat)=rownames(loaddata)
+    mat=t(mat)
+    df.label_col=loaddata[,class_label]
+    df.ha=df.sample[,ha_cols]
+
+    annotations_list <- c()
+    i=1
+    for (ha_col in ha_cols) {
+        ha_color_mapping <- candidate_colors[1:length(unique(df.ha[[ha_col]]))]
+        ha_color_mapping <- setNames(ha_color_mapping, unique(df.ha[[ha_col]]))
+        color_list <- list()
+        color_list[ha_col] <- ha_color_mapping
+        top_ha <- HeatmapAnnotation(df = df.ha[ha_col], col = color_list[i],
+                                    simple_anno_size = unit(4, "mm"),
+                                    gap = unit(1, "points"),
+                                    show_annotation_name = TRUE)
+        annotations_list <- c(annotations_list, top_ha)
+        i=i+1
+    }
+    
+    # Combine all annotations
+    combined_top_ha <- Reduce(`+`, annotations_list)
+    
+    col_ha <- df.label_col
+    
+    break_low_boundary <- -2
+    break_high_boundary <- 3
+    break_step_length <- 0.01
+    bk <- c(seq(break_low_boundary, break_high_boundary, by = break_step_length))
+    bk <- c(-1.5, 0, 1.5)
+    col_fun <- colorRamp2(bk, c("#1D91C0", "white", "#E31A1C"))
+    
+    if (col_split == FALSE) {
+        col_ha <- NULL
+    }
+    
+    col_ha=df.label_col
+    break_low_boundary=-2
+    break_high_boundary=3
+    break_step_length=0.01
+    # bk <- c(seq(break_low_boundary,0,by=0.01),seq(0,break_high_boundary,by=0.01))
+    bk <- c(seq(break_low_boundary,break_high_boundary,by=break_step_length))
+    bk=c(-1.5,0,1.5)
+    col_fun<-colorRamp2(
+        bk,
+        c("#1D91C0", "white", "#E31A1C"))
+    if(col_split==F){
+      col_ha=NULL
+    }
+    if(use_row_ha){
+        row_ha=data.frame(lipid=feature_cols)
+        row_ha$headgroup=str_extract(feature_cols,'([A-Z]*[a-z]*)*')
+        row_ha=as.vector(row_ha$headgroup)
+        p<-ComplexHeatmap::pheatmap(mat,
+                                    col = col_fun,
+                                    name = "Relative level",
+                                    column_split = col_ha,
+                                    row_split = row_ha,
+                                    top_annotation=combined_top_ha,
+                                    cluster_row_slices=F,
+                                    fontsize_row = 7, 
+                                    cluster_cols = T,
+                                    row_title_rot = 0,
+                                    fontsize_col = 5,
+                                    treeheight_row = 20,
+                                    treeheight_col = 20,
+                                    row_title_gp = gpar(fontsize = 7),
+                                    legend_breaks=seq(break_low_boundary,break_high_boundary,(break_high_boundary-break_low_boundary)/4),
+                                    scale="row",
+                                    breaks = bk
+                                )
+    }else{
+        p<-ComplexHeatmap::pheatmap(mat,
+                                col = col_fun,
+                                name = "Relative level",
+                                column_split = col_ha,
+                                #row_split = row_ha,
+                                top_annotation=combined_top_ha,
+                                cluster_row_slices=F,
+                                fontsize_row = 7, 
+                                cluster_cols = T,
+                                row_title_rot = 0,
+                                fontsize_col = 5,
+                                treeheight_row = 20,
+                                treeheight_col = 20,
+                                row_title_gp = gpar(fontsize = 7),
+                                legend_breaks=seq(break_low_boundary,break_high_boundary,(break_high_boundary-break_low_boundary)/4),
+                                scale="row",
+                                breaks = bk#,
+                                # column_split = col_ha
+                                )
+    }
+    
+    q=draw(
+        p,  
+        heatmap_legend_side = "left", 
+        annotation_legend_side = "left"
+    )
+    return(p)
+}
+
+```
+
+```{r}
+df.sample
+rows_with_na <- apply(loaddata, 1, function(row) any(is.na(row)))
+loaddata[!rows_with_na,]
+class_label='MT2结构'
+loaddata[is.na(loaddata)]='NaN'
+# loaddata[class_label]=as.vector(loaddata[[class_label]])
+feature_cols=intersect(ensemble.sig,colnames(loaddata))
+tmp_draw_heatmap(loaddata[!is.na(loaddata[[class_label]]),],feature_cols,class_label,c(class_label,'codex_new'),FALSE)
+print(length(feature_cols))
+loaddata['codex_new']
+```
+
+```{r}
+class_label='克隆'
+# loaddata[class_label]=as.vector(loaddata[[class_label]])
+feature_cols=intersect(ensemble.sig,colnames(loaddata))
+draw_heatmap(loaddata[!is.na(loaddata[[class_label]]),],feature_cols,class_label,class_label,FALSE)
+print(length(feature_cols))
+```
+
+```{r}
+col_split=TRUE
+use_row_ha=FALSE
+ha_cols=c(class_label,'codex_new')
+candidate_colors <- c("#8ea3c2",  "#8ccdbf", "#edb17f",  "#f1df82","#FEA3A2","#8E8BFE")
+# candidate_colors=c("#FEA3A2","#8E8BFE","#")
+mat=data.matrix(loaddata[,feature_cols])
+rownames(mat)=rownames(loaddata)
+mat=t(mat)
+df.label_col=loaddata[,class_label]
+df.ha=loaddata[,ha_cols]
+
+annotations_list <- c()
+i=1
+for (ha_col in ha_cols) {
+    ha_color_mapping <- candidate_colors[1:length(unique(df.ha[[ha_col]]))]
+    ha_color_mapping <- setNames(ha_color_mapping, unique(df.ha[[ha_col]]))
+    color_list <- list(ha_color_mapping)
+    names(color_list)=ha_col
+    top_ha <- HeatmapAnnotation(df = df.ha[ha_col], col = color_list,
+                                simple_anno_size = unit(4, "mm"),
+                                gap = unit(1, "points"),
+                                show_annotation_name = TRUE)
+    annotations_list <- c(annotations_list, top_ha)
+    i=i+1
+}
+
+# Combine all annotations
+# combined_top_ha <- Reduce(`+`, annotations_list)
+combined_top_ha <- annotations_list
+
+col_ha <- df.label_col
+
+break_low_boundary <- -2
+break_high_boundary <- 3
+break_step_length <- 0.01
+bk <- c(seq(break_low_boundary, break_high_boundary, by = break_step_length))
+bk <- c(-1.5, 0, 1.5)
+col_fun <- colorRamp2(bk, c("#1D91C0", "white", "#E31A1C"))
+
+if (col_split == FALSE) {
+    col_ha <- NULL
+}
+
+col_ha=df.label_col
+break_low_boundary=-2
+break_high_boundary=3
+break_step_length=0.01
+# bk <- c(seq(break_low_boundary,0,by=0.01),seq(0,break_high_boundary,by=0.01))
+bk <- c(seq(break_low_boundary,break_high_boundary,by=break_step_length))
+bk=c(-1.5,0,1.5)
+col_fun<-colorRamp2(
+    bk,
+    c("#1D91C0", "white", "#E31A1C"))
+if(col_split==F){
+  col_ha=NULL
+}
+if(use_row_ha){
+    row_ha=data.frame(lipid=feature_cols)
+    row_ha$headgroup=str_extract(feature_cols,'([A-Z]*[a-z]*)*')
+    row_ha=as.vector(row_ha$headgroup)
+    p<-ComplexHeatmap::pheatmap(mat,
+                                col = col_fun,
+                                name = "Relative level",
+                                column_split = col_ha,
+                                row_split = row_ha,
+                                top_annotation=combined_top_ha,
+                                cluster_row_slices=F,
+                                fontsize_row = 7, 
+                                cluster_cols = T,
+                                row_title_rot = 0,
+                                fontsize_col = 5,
+                                treeheight_row = 20,
+                                treeheight_col = 20,
+                                row_title_gp = gpar(fontsize = 7),
+                                legend_breaks=seq(break_low_boundary,break_high_boundary,(break_high_boundary-break_low_boundary)/4),
+                                scale="row",
+                                breaks = bk
+                            )
+}else{
+    p<-ComplexHeatmap::pheatmap(mat,
+                            col = col_fun,
+                            name = "Relative level",
+                            column_split = col_ha,
+                            #row_split = row_ha,
+                            top_annotation=combined_top_ha,
+                            cluster_row_slices=F,
+                            fontsize_row = 7, 
+                            cluster_cols = T,
+                            row_title_rot = 0,
+                            fontsize_col = 5,
+                            treeheight_row = 20,
+                            treeheight_col = 20,
+                            row_title_gp = gpar(fontsize = 7),
+                            legend_breaks=seq(break_low_boundary,break_high_boundary,(break_high_boundary-break_low_boundary)/4),
+                            scale="row",
+                            breaks = bk#,
+                            # column_split = col_ha
+                            )
+}
+
+q=draw(
+    p,  
+    heatmap_legend_side = "left", 
+    annotation_legend_side = "left"
+)
+```
+
+```{r}
+annotations_list
+type(annotations_list[[1]])
+```
+
+```{r}
+class_label='克隆'
+# loaddata[class_label]=as.vector(loaddata[[class_label]])
+feature_cols=intersect(ensemble.sig,colnames(loaddata))
+draw_heatmap(loaddata[!is.na(loaddata[[class_label]]),],feature_cols,class_label,class_label,FALSE)
+print(length(feature_cols))
+```
+
+#### Cluster Info
+
+```{r}
+v_corrected.deseq=as.data.frame(t(assay(vst(dds,blind = FALSE))))
+v_corrected.deseq
+# v_corrected.deseq=v_corrected.deseq+abs(min(v_corrected[v_corrected.deseq<=0]))+1
+loaddata=merge(v_corrected.deseq,df.cluster_result,by="row.names")
+rownames(loaddata)=loaddata[,1]
+loaddata=loaddata[2:ncol(loaddata)]
+idx <- which(loaddata =='-Inf', arr.ind = TRUE)
+loaddata[idx]=0
+```
+
+```{r}
+loaddata=merge(df.rna_counts,df.cluster_result,by="row.names")
+rownames(loaddata)=loaddata[,1]
+loaddata=loaddata[2:ncol(loaddata)]
+idx <- which(loaddata =='-Inf', arr.ind = TRUE)
+loaddata[idx]=0
+```
+
+```{r}
+class_label='batch'
+feature_cols=intersect(ensemble.sig.deseq,colnames(loaddata))
+draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE)
+print(length(feature_cols))
+```
+
+```{r}
+class_label='kmeans_2_clusters'
+feature_cols=intersect(ensemble.sig.deseq,colnames(loaddata))
+draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE)
+draw_heatmap(loaddata,feature_cols,class_label,class_label,FALSE,FALSE)
+print(length(feature_cols))
+kegg_table
+```
+
+### Save Data
+
+```{r}
+
+symbols=bitr(rownames(df.stat.deseq), #数据集
+  fromType="ENSEMBL", #输入为SYMBOL格式
+  toType="SYMBOL",  # 转为ENTERZID格式
+  OrgDb="org.Hs.eg.db") #人类 数据库
+df.stat_test=merge(df.stat.deseq,symbols,by.x="row.names",by.y="ENSEMBL",all.x=TRUE)
+df.stat_test
+length(unique(rownames(df.stat_test)))
+length(unique(df.stat_test$SYMBOL))
+df.normed.with_sample=merge(2**(v_corrected.deseq),df.sample_cluster,by.x="row.names",by.y="Sample Name")
+# Loged and Normed
+# write.csv(t(2**(v_corrected.deseq)),"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240522_deseq/normed_matrix_t.csv")
+# write.csv(df.stat.deseq,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240522_deseq/stat.csv")
+# write.csv(df.stat.deseq,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240522_deseq/stat.csv")
+# write.csv(t(df.raw_counts[rownames(v_corrected.deseq),]),"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240522_deseq/raw_counts_t.csv")
+# write.csv(t(df.normed.with_sample),"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240522_deseq/normed_t_sample.csv")
+# write.csv(df.stat_test,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240522_deseq/stat_symbol.csv")
+
+```
+
+## KEGG
+
+### Load Data
+
+```{r}
+df.test=merge(v_corrected.deseq,df.cluster_result,by='row.names')
+df.test %>%
+  group_by(kmeans_2_clusters) %>%
+  summarise(ENSG00000000003=mean(ENSG00000000003))
+```
+
+```{r}
+# df.test.results=read.csv("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240522_deseq/stat.csv",row.names = 1)
+df.test.results=read.csv("~/workstation/MetabSubtype/tasks/MultiOmics/data/tmp/DEGlist.csv",row.names = 1)
+df.test.results
+```
+
+```{r}
+test = bitr(df.test.results$, #数据集
+  fromType="SYMBOL", #输入为SYMBOL格式
+  toType="ENTREZID",  # 转为ENTERZID格式
+  OrgDb="org.Hs.eg.db")
+df.test.results$ensemble
+
+df.test.results=merge(df.test.results,test,by.x='gene_symbol',by.y='SYMBOL')
+```
+
+```{r}
+bitr(df.test.results, #数据集
+  fromType="SYMBOL", #输入为SYMBOL格式
+  toType="ENTREZID",  # 转为ENTERZID格式
+  OrgDb="org.Hs.eg.db")
+```
+
+```{r}
+all_symbols=df.test.results[['gene_symbol']]
+test=bitr(all_symbols, #数据集
+  fromType="SYMBOL", #输入为SYMBOL格式
+  toType="ENSEMBL",  # 转为ENTERZID格式
+  OrgDb="org.Hs.eg.db")
+```
+
+```{r}
+
+logfc_cutoff=log2(2)
+pvalue_cutoff=5e-2
+df.test.results$is_use=(df.test.results$qval<=pvalue_cutoff)&(abs(df.test.results$log2foldchange)>=logfc_cutoff)
+ensemble.sig=rownames(df.test.results[df.test.results$is_use,])
+length(ensemble.sig)
+
+df.test.results.up=df.test.results[df.test.results$log2foldchange>0,]
+df.test.results.down=df.test.results[df.test.results$log2foldchange<0,]
+
+dim(df.test.results.up)
+dim(df.test.results.down)
+```
+
+```{r}
+test_df=df.sample_cluster[,c('kmeans_2_clusters','MT2结构')]
+table(test_df)
+```
+
+### UP
+
+```{r}
+
+used_ens_ids=rownames(df.test.results.up[df.test.results.up$is_use,])
+
+used_ens_ids=df.test.results.up[df.test.results.up$is_use,'gene_symbol']
+
+columns(org.Hs.eg.db)
+
+# used_ens_ids=rownames(df.test.results.down[df.test.results.down$is_use,])
+
+used_ens_ids=df.test.results.up[df.test.results.up$is_use,'gene_symbol']
+columns(org.Hs.eg.db)
+# used_entrz_ids=mapIds(org.Hs.eg.db,keys=used_ens_ids,keytype="ENSEMBL",column="ENTREZID")
+
+test = bitr(used_ens_ids, #数据集
+  fromType="SYMBOL", #输入为SYMBOL格式
+  toType="ENTREZID",  # 转为ENTERZID格式
+  OrgDb="org.Hs.eg.db") #人类 数据库
+head(test,2)
+
+# used_entrz_ids=mapIds(org.Hs.eg.db,keys=used_ens_ids,keytype="ENSEMBL",column="ENTREZID")
+used_entrz_ids=test[['ENTREZID']]
+print(paste0('used metab number is ',length(used_entrz_ids[!is.na(used_entrz_ids)]),' out of ',length(used_ens_ids)))
+
+kegg_result=enrichKEGG(
+  test[['ENTREZID']],
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  use_internal_data = FALSE
+)
+kegg_table <- na.omit(as.data.frame(kegg_result))
+
+kegg_table$FoldEnrich <- apply(kegg_table, 1, 
+                               function(x) as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[1])/
+                                 as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+kegg_table$symbol=apply(kegg_table,1,get_symbols)
+
+# Generate Draw Table
+kegg_table_draw=kegg_table
+unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
+kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+
+pathway_names=unique(kegg_table_draw$Description)
+
+kegg_table_draw
+
+# Figure using FDR as X
+kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
+kegg_table_draw
+kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-min((nrow(kegg_table_draw)-1),15)):nrow(kegg_table_draw),]
+dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
+# write.csv(kegg_table.mt2,paste0(dirpath,'counts_pathway_up.csv',collapse = '/'))
+
+kegg_table_draw$FDR
+kegg_table_draw$FoldEnrich
+
+# Up
+kegg_table_draw$comporison='UP'
+kegg_table_draw.up=kegg_table_draw
+p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(5, 12), breaks = c(seq(3,10,2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(2,8,2)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "RNA Upregulated", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+# pdf(paste(dirpath,'rna_counts_up.pdf',sep = ''),12,7)
+print(p)
+```
+
+```{r}
+get_symbols<-function(kegg_table_row){
+  gene_ids=unlist(strsplit(kegg_table_row[['geneID']],'[/]'))
+  gene_ids
+  keytypes(org.Hs.eg.db)
+  symbols=bitr(gene_ids, #数据集
+    fromType="ENTREZID", #输入为SYMBOL格式
+    toType="SYMBOL",  # 转为ENTERZID格式
+    OrgDb="org.Hs.eg.db") #人类 数据库
+  symbols=symbols[['SYMBOL']]
+  return(paste(symbols,collapse = '/'))
+
+}
+
+
+```
+
+#### Save Data
+
+```{r}
+kegg_table$symbol
+# write.csv(kegg_table,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240522_deseq/kegg_table.csv")
+```
+
+### DOWN
+
+```{r}
+test['ENTREZID']
+```
+
+```{r}
+used_ens_ids=rownames(df.test.results.down[df.test.results.down$is_use,])
+
+used_ens_ids=df.test.results.down[df.test.results.down$is_use,'gene_symbol']
+columns(org.Hs.eg.db)
+# used_entrz_ids=mapIds(org.Hs.eg.db,keys=used_ens_ids,keytype="ENSEMBL",column="ENTREZID")
+
+test = bitr(used_ens_ids, #数据集
+  fromType="SYMBOL", #输入为SYMBOL格式
+  toType="ENTREZID",  # 转为ENTERZID格式
+  OrgDb="org.Hs.eg.db") #人类 数据库
+head(test,2)
+
+used_entrz_ids=test[['ENTREZID']]
+print(paste0('used metab number is ',length(used_entrz_ids[!is.na(used_entrz_ids)]),' out of ',length(used_ens_ids)))
+length(used_entrz_ids)
+kegg_result=enrichKEGG(
+  used_entrz_ids,
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  use_internal_data = FALSE
+)
+kegg_table <- na.omit(as.data.frame(kegg_result))
+kegg_table <- kegg_table[kegg_table$Count > 2,]
+
+# kegg_table$metabs_mean <- apply(kegg_table, 1, path_avelog2FC,df.test.results=df.test.results)
+# calculate fold enrichment
+kegg_table[1:5,3:8]
+dim(kegg_table)
+kegg_table$FoldEnrich <- apply(kegg_table, 1, 
+                               function(x) as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[1])/
+                                 as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+kegg_table$symbol=apply(kegg_table,1,get_symbols)
+
+# Generate Draw Table
+kegg_table_draw=kegg_table
+unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
+kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+
+pathway_names=unique(kegg_table_draw$Description)
+
+kegg_table_draw
+
+# Figure using FDR as X
+kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
+kegg_table_draw=kegg_table_draw[max(1,(nrow(kegg_table_draw)-10)):nrow(kegg_table_draw),]
+# dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240504_singleomic/'
+# write.csv(kegg_table.mt2,paste0(dirpath,'counts_pathway_down.csv',collapse = '/'))
+
+kegg_table_draw$FDR
+kegg_table_draw$FoldEnrich
+
+# Down
+kegg_table_draw$comporison='DOWN'
+kegg_table_draw.down=kegg_table_draw
+
+p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(3, 15), breaks = c(seq(1,3,0.2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(10,17,2)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "RNA Downregulated", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+# pdf(paste(dirpath,'rna_counts_up.pdf',sep = ''),12,7)
+print(p)
+```
+
+### Combine
+
+```{r}
+kegg_table_draw.all[kegg_table_draw.all$comporison=='DOWN','FDR']
+kegg_table_draw.all$FoldEnrich
+```
+
+```{r}
+
+kegg_table_draw.all=rbind(kegg_table_draw.up,kegg_table_draw.down)
+kegg_table_draw.all=kegg_table_draw.all[order(kegg_table_draw.all$pvalue,decreasing = TRUE),]
+
+
+# Up/Down
+ggplot(kegg_table_draw.all, aes(comporison, Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw.all[['Description']])+
+  scale_size(range = c(3, 12), breaks = c(3,5,7,8)) +
+# scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(2,30,4))) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  coord_fixed(ratio = 0.4) +
+  labs(x = "", y = "", title = "", 
+       fill = "Abs.Log2 (FC)", size = "-Log10 (P-value)") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+
+# Category
+ggplot(kegg_table_draw.all, aes(category, Description)) +
+  geom_point(aes(fill = -log10(FDR) , size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw.all[['Description']])+
+  scale_size(range = c(3, 12), breaks = c(3,5,7,8)) +
+# scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(2,30,4))) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  coord_fixed(ratio = 0.4) +
+  labs(x = "", y = "", title = "", 
+       fill = "Abs.Log2 (FC)", size = "-Log10 (P-value)") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+
+```
+
+# Plot
+
+## Volcano
+
+```{r}
+ensemble.sig.deseq
+```
+
+```{r}
+
+# class_label='kmeans_2_clusters'
+class_label='MT2结构'
+df.use_sample=df.sample
+df.use=merge(v_corrected.edger[,ensemble.sig.edger],df.sample[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+volcano.test.results=pvalue_by_wilcox(df.use,(ncol(df.use)-1),class_label)
+
+type1='low'
+type2='high'
+volcano.test.results$FC=apply(df.use[,1:(ncol(df.use)-1)], 2, 
+                          function(x) 
+                            mean(as.numeric(x[which(df.use[class_label] == type2)]))/
+                            mean(as.numeric(x[which(df.use[class_label] == type1)])))
+head(volcano.test.results)
+# Log2 (FC)
+volcano.test.results$log2FC <- log2(volcano.test.results[,'FC'])
+
+dim(volcano.test.results[volcano.test.results$pvalue<5e-2,])
+dim(volcano.test.results[(volcano.test.results$pvalue<5e-2)&(abs(volcano.test.results$log2FC)>log2(1.4)),])
+##标记上调下调
+pvalue_cutoff=5e-2
+fc_up_cutoff=2
+fc_down_cutoff=1/fc_up_cutoff
+
+draw_volcano(volcano.test.results,pvalue_cutoff,fc_up_cutoff)
+
+ordered(volcano.test.results$FC)
+```
+
+```{r}
+volcano.test.results[volcano.test.results$log2FC>0,]
+volcano.test.results[volcano.test.results$log2FC<0,]
+
+```
+
+## Heatmap
+
+```{r}
+df.test.results=df.stat.deseq
+class_label='MT2结构'
+df.sample['MT2结构']=as.factor(df.sample[['MT2结构']])
+# sig_cols=rownames(df.test.results[df.test.results$is_use=='TRUE',])
+df.sample_cluster$kmeans_2_clusters=as.factor(df.sample_cluster[['kmeans_2_clusters']])
+loaddata=merge(v_corrected.deseq,df.sample[,class_label,drop=FALSE],by="row.names")
+
+rownames(loaddata)=loaddata[,1]
+loaddata=loaddata[2:ncol(loaddata)]
+idx <- which(loaddata =='-Inf', arr.ind = TRUE)
+loaddata[idx]=0
+feature_cols=colnames(v_corrected.deseq)
+draw_heatmap(loaddata[!is.na(loaddata[class_label]),],feature_cols,class_label,class_label,FALSE)
+```
+
+## Survival
+
+```{r fig.height=6, fig.width=10}
+
+time_label_col='os'
+event_label_col=paste0(time_label_col,'s')
+##### Survival #####
+df.use.os=merge(df.cluster_result,df.sample[,c(time_label_col,event_label_col)],by='row.names')
+df.use.os=df.use.os[order(df.use.os[[time_label_col]]),,drop=FALSE]
+
+surv_object=Surv(df.use.os[[time_label_col]],df.use.os[[event_label_col]])
+
+# K-MEANS
+kmeans_fit=survfit(surv_object~kmeans_2_clusters,data=df.use.os)
+kmeans_plot=ggsurvplot(kmeans_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
+# kmeans
+kmeans_fit=survfit(surv_object~kmeans_2_clusters,data=df.use.os)
+kmeans_plot=ggsurvplot(kmeans_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
+# kmeans_plot
+# Combine
+arrange_ggsurvplots(list(kmeans_plot,kmeans_plot),ncol=2,nrow=1, data = df.use.os,pval = TRUE,title=toupper(time_label_col))
+
+```
+
+## Clustering Figs
+
+### Heatmap
+
+```{r}
+class_label='kmeans_2_clusters'
+df.cluster_result[class_label]=as.factor(df.cluster_result[[class_label]])
+genes = c(
+    "HK1", "HK2", "HKDC1", "PFKP", "PFKL", "FBP1", "FBP2", 
+    "ALDOA", "ALDOB", "ALDOC", "GPI", "GAPDH", "PGK1", 
+    "ENO1", "ENO2", "ENO3", "PKM", "PDP1", "PDP2", 
+    "AKR1B1", "ADH1A", "ADH1B", "ADH1C", "ADH4", "ADH5", 
+    "ACSS1", "ACSS2", "TALDO1", "PGD", "TKT", "TALDO1", 
+    "RPE", "RPIA", "PRPS1", "PRPS2", "G6PD", "GLYCTK"
+)
+test = bitr(genes, #数据集
+  fromType="SYMBOL", #输入为SYMBOL格式
+  toType="ENSEMBL",  # 转为ENTERZID格式
+  OrgDb="org.Hs.eg.db") #人类 数据库
+
+
+df.sample_cluster$kmeans_2_clusters=as.factor(df.sample_cluster[['kmeans_2_clusters']])
+feature_cols=test[['ENSEMBL']]
+shared_cols=intersect(colnames(v_corrected.edger), feature_cols)
+
+loaddata=v_corrected.edger[,shared_cols]
+colnames(loaddata) = test[match(shared_cols, test[['ENSEMBL']]), 'SYMBOL']
+loaddata=merge(loaddata,df.cluster_result[,class_label,drop=FALSE],by="row.names")
+rownames(loaddata)=loaddata[,1]
+loaddata=loaddata[2:ncol(loaddata)]
+idx <- which(loaddata =='-Inf', arr.ind = TRUE)
+loaddata[idx]=0
+
+draw_heatmap(loaddata[!is.na(loaddata[class_label]),],test[['SYMBOL']],class_label,class_label,FALSE)
+```
+
+```{r}
+setdiff(genes, test[['SYMBOL']])
+```
+
+### KEGG
+
+```{r}
+
+# 假设你的数据框是 loaddata，行是基因，列是样本
+# df.sample_cluster 包含样本的聚类信息
+cluster2_samples <- df.sample_cluster$kmeans_2_clusters == 2
+cluster1_samples <- df.sample_cluster$kmeans_2_clusters == 1
+
+# 计算2型样本的平均表达量
+loaddata=loaddata[2:ncol(loaddata)]
+idx <- which(loaddata =='-Inf', arr.ind = TRUE)
+loaddata[idx]=0
+# 将所有 NA 替换为 0
+loaddata[is.na(loaddata)] <- 0
+
+# Calculate mean
+mean_expr_cluster1 <- colMeans(loaddata[cluster1_samples, 1:(ncol(loaddata)-1)],na.rm=TRUE)
+mean_expr_cluster2 <- colMeans(loaddata[cluster2_samples,1:(ncol(loaddata)-1)] ,na.rm=TRUE)
+
+diff_expr <- mean_expr_cluster2 /mean_expr_cluster1
+
+upregulated_genes <- colnames(loaddata[,1:(ncol(loaddata)-1)])[abs(diff_expr) > 1]
+
+# upregulated_genes <- colnames(loaddata)[abs(diff_expr) > 1]
+
+# 输出上调基因的列表
+upregulated_genes
+```
+
+```{r}
+
+
+test = bitr(upregulated_genes, #数据集
+  fromType="SYMBOL", #输入为SYMBOL格式
+  toType="ENTREZID",  # 转为ENTERZID格式
+  OrgDb="org.Hs.eg.db") #人类 数据库
+
+# used_entrz_ids=mapIds(org.Hs.eg.db,keys=used_ens_ids,keytype="ENSEMBL",column="ENTREZID")
+used_entrz_ids=test[['ENTREZID']]
+#print(paste0('used metab number is ',length(used_entrz_ids[!is.na(used_entrz_ids)]),' out of ',length(used_ens_ids)))
+
+kegg_result=enrichKEGG(
+  test[['ENTREZID']],
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  use_internal_data = FALSE
+)
+kegg_table <- na.omit(as.data.frame(kegg_result))
+
+kegg_table$FoldEnrich <- apply(kegg_table, 1, 
+                               function(x) as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[1])/
+                                 as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+
+kegg_table$symbol=apply(kegg_table,1,get_symbols)
+
+# Generate Draw Table
+kegg_table_draw=kegg_table
+unwanted_pathways=c('Glycerolipid metabolism','Butanoate metabolism','Lipoic acid metabolism','Arginine biosynthesis','Nitrogen metabolism')
+kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+
+pathway_names=unique(kegg_table_draw$Description)
+
+kegg_table_draw
+
+# Figure using FDR as X
+kegg_table_draw=kegg_table_draw[order(kegg_table_draw$pvalue,decreasing = TRUE),]
+kegg_table_draw
+# kegg_table_draw=kegg_table_draw[(nrow(kegg_table_draw)-min((nrow(kegg_table_draw)-1),15)):nrow(kegg_table_draw),]
+dirpath='~/workstation/MetabSubtype/tasks/MultiOmics/results/20240924_external_genes/'
+write.csv(kegg_table,paste0(dirpath,'external_up.csv',collapse = '/'))
+
+kegg_table_draw$FDR
+kegg_table_draw$FoldEnrich
+
+# Up
+kegg_table_draw$comporison='UP'
+kegg_table_draw.up=kegg_table_draw
+p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(5, 12), breaks = c(seq(3,10,2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(2,8,2)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "RNA Upregulated", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+# pdf(paste(dirpath,'rna_counts_up.pdf',sep = ''),12,7)
+print(p)
+```

@@ -396,7 +396,7 @@ draw_heatmap<-function(loaddata,feature_cols,class_label,ha_col,use_row_ha=FALSE
         gap = unit(1, "points"),
         show_annotation_name = TRUE)
     col_ha=df.label_col
-    break_low_boundary=-2
+    break_low_boundary=-3
     break_high_boundary=3
     break_step_length=0.01
     # bk <- c(seq(break_low_boundary,0,by=0.01),seq(0,break_high_boundary,by=0.01))
