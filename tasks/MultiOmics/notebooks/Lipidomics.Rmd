@@ -399,11 +399,11 @@ volcano.test.results$lipid_class=sapply(volcano.test.results$Metabolites,functio
 
 table(volcano.test.results$lipid_class)
 sum(table(volcano.test.results$lipid_class))
-# write.csv(volcano.test.results,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/lipid_stat.csv")
+write.csv(volcano.test.results,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/lipid_stat.csv")
 # volcano.test.results$lipid_class
 
 # Test Stored Volcano
-# volcano.test.results=read.csv("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/lipid_stat.csv",row.names = 1)
+volcano.test.results=read.csv("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/lipid_stat.csv",row.names = 1)
 ```
 
 ```{r}

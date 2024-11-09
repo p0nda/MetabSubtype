@@ -20,6 +20,12 @@ matched_indices <- match(df.test_results$ENSEMBL, tmp_key$ENSEMBL)
 df.test_results$ENTREZID <- tmp_key$ENTREZID[matched_indices]
 ```
 
+```{r}
+ENSG00000132915
+v_corrected.edger[,'ENSG00000132915']
+
+```
+
 ## Non-Coding
 
 ```{r}
@@ -104,8 +110,22 @@ writeLines(entrezid.sig, "entrezid_sig.txt")
 # GSEA
 
 ```{r}
-foldchanges=df.test_results[,'fc']
-names(foldchanges)=df.test_results[,'ENTREZID']
+
+
+pathway_name='methionine'
+pathway_id <- "hsa00270"
+# 获取通路信息
+pathway_info <- keggGet(pathway_id)
+# 提取基因信息
+genes <- pathway_info[[1]]$GENE
+# 将基因ID和名称分离
+gene_ids <- genes[seq(1, length(genes), 2)]
+gene_names <- genes[seq(2, length(genes), 2)]
+
+using.test_results=df.test_results[df.test_results$ENTREZID %in% gene_ids,]
+using.test_results=df.test_results
+foldchanges=using.test_results[,'fc']
+names(foldchanges)=using.test_results[,'ENTREZID']
 # gene_list<-na.omit(gene_list)
 gene_list=foldchanges
 gene_list = sort(gene_list, decreasing = TRUE)
@@ -119,7 +139,16 @@ gseaplot(kk2, by = "runningScore", title = kk2$Description[1], geneSetID = 1)
 head(kk2)
 
 description_name="Cysteine and methionine metabolism"
-gseaplot2(kk2,  title = description_name, geneSetID = which(kk2$Description==description_name))
+wanted_pathways=c('Purine metabolism')
+for (description_name in wanted_pathways){
+  p=gseaplot2(kk2,  title = description_name, geneSetID = which(kk2$Description==description_name))
+  
+  filepath_name=paste0('~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/gsea/',description_name,'.pdf')
+  pdf(filepath_name)
+  print(p)
+  dev.off()
+
+}
 
 ```
 
@@ -414,7 +443,7 @@ row_ha=rowAnnotation(sig=df.test_results[df.test_results$SYMBOL %in% queries,'is
 mat=as.matrix(df.test_results[df.test_results$SYMBOL %in% queries,'log2fc',drop=FALSE])
 rownames(mat)=df.test_results[match(rownames(mat),df.test_results$ENSEMBL),'SYMBOL']
 # mat=mat[order(mat),,drop=FALSE]
-bk=c(-1,0,1)
+bk=c(-2,0,2)
 col_fun<-colorRamp2(
   bk,
   c("#1D91C0", "white", "#E31A1C"))
@@ -500,6 +529,7 @@ if (pathway_name=='Purine metabolism'){
 }
 draw(p)
 dev.off()
+df.test_results[df.test_results$ENTREZID %in% rnas,]
 df.test_results[df.test_results$ENTREZID %in% rnas,c('SYMBOL','ENTREZID')]
 ```
 

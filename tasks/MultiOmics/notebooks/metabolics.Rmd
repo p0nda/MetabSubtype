@@ -109,6 +109,35 @@ for (col in colnames(df.cluster_result)){
 }
 ```
 
+# Prepare Data
+
+```{r}
+
+class_label='kmeans_2_clusters'
+df.use=merge(df.raw_metab.scaled,df.cluster_result[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+pathway_matrix=df.use %>% group_by(!!sym(class_label)) %>% summarise_all(mean)
+dim(pathway_matrix)
+colnames(pathway_matrix)
+# Row Name Specified
+df.pathway_fc=as.data.frame(pathway_matrix)
+row.names(df.pathway_fc)=df.pathway_fc[[1]]
+df.pathway_fc=df.pathway_fc[,2:ncol(df.pathway_fc)]
+df.pathway_fc['fc',]=df.pathway_fc['2',]/df.pathway_fc['1',]
+df.pathway_fc=t(df.pathway_fc)
+df.pathway_fc=as.data.frame(df.pathway_fc)
+df.pathway_fc
+colnames(df.pathway_fc)
+df.pathway_fc[['fc']]
+df.pathway_fc['log2fc']=sapply(df.pathway_fc[['fc']],log2)
+pvalue.kmeans_pathway=pvalue_by_wilcox(df.use,rna_num,class_label)
+pvalue.kmeans_pathway
+match(pvalue.kmeans_pathway[['Metabolites']],rownames(df.pathway_fc))
+df.pathway_fc$pvalue=pvalue.kmeans_pathway[match(pvalue.kmeans_pathway[['Metabolites']],rownames(df.pathway_fc)),'pvalue']
+```
+
 # Heatmap
 
 ```{r}
@@ -118,12 +147,12 @@ row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
 dim(df.use)
-p_cutoff=5e-2
+p_cutoff=1e-2
 
 df.use=df.use[order(df.use[[class_label]]),]
 df.use[class_label]
 
-filepath=paste0(dirpath,'metab_sig_heatmap.pdf')
+filepath=paste0(dirpath,'metab_sig_heatmap_1e-2.pdf')
 pdf(filepath)
 draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',p_cutoff,FALSE )
 dev.off()
