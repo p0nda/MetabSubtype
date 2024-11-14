@@ -171,6 +171,8 @@ fit <- eBayes(fit)
 dim(v$E)
 v_corrected.edger=as.data.frame(t(v$E))
 rna_num=ncol(v_corrected.edger)
+
+# write.csv(v_corrected.edger,'~/workstation/MetabSubtype/tasks/MultiOmics/data/rna/edger.csv')
 ```
 
 ```{r}

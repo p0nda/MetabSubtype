@@ -294,19 +294,6 @@ get_codex_label<-function(sample_info,group_col,target_group){
 
 ##### Heatmap #####
 
-filter_by_wilcox<-function(df.test,feature_cols,class_label,threshold=100){
-    df.test=df.test[!is.na(df.test[class_label]),]
-    df.test.results=data.frame(Metabolites = feature_cols)                        
-    df.test.results$wilcox <- apply(df.test[, feature_cols], 2,
-                            function(x) unlist(wilcox.test(as.numeric(x) ~ df.test[,class_label], data = df.test, exact = FALSE)[3]))
-    # min(df.test.results[2])
-    sig_df<-which(df.test.results$wilcox<threshold)
-    a<-df.test.results[sig_df,]
-    sig_list<-a$Metabolites    
-    df.selected<-df.test[,c(sig_list,class_label),drop=FALSE]
-    print(dim(df.selected))
-    return(df.selected)      
-}
 pvalue_by_wilcox<-function(df.test,metab_num,class_label){
     df.test=df.test[!is.na(df.test[class_label]),]
     feature_cols=colnames(df.test)[1:metab_num]
@@ -349,17 +336,48 @@ filter_by_ttest<-function(df.test,feature_cols,class_label,threshold=100){
     return(df.selected)      
 }
 
-filter_by_kruskal<-function(df.test,feature_cols,class_label,threshold=100){
-    df.test.results=data.frame(Metabolites = feature_cols)                        
-    df.test.results$kruskal <- apply(df.test[, feature_cols], 2,
-                            function(x) unlist(kruskal.test(as.numeric(x) ~ df.test[,class_label], data = df.test)[3]))
-    # min(df.test.results[2])
-    sig_df<-which(df.test.results$kruskal<=threshold)
-    a<-df.test.results[sig_df,]
-    sig_list<-a$Metabolites    
-    df.selected<-df.test[,c(sig_list,class_label),drop=FALSE]
-    print(dim(df.selected))
-    return(df.selected)      
+# Metabolite Selection Functions (returning only selected metabolite names)
+
+filter_by_kruskal <- function(df, feature_cols, class_label, threshold = 0.05) {
+  df.results <- data.frame(Metabolites = feature_cols)
+  df.results$kruskal <- apply(df[, feature_cols], 2, 
+                              function(x) kruskal.test(as.numeric(x) ~ df[[class_label]])$p.value)
+  selected_metabolites <- df.results$Metabolites[df.results$kruskal <= threshold]
+  return(selected_metabolites)
+}
+
+filter_by_wilcox <- function(df, feature_cols, class_label, threshold = 0.05) {
+  df.results <- data.frame(Metabolites = feature_cols)
+  df.results$wilcox <- apply(df[, feature_cols], 2, 
+                             function(x) wilcox.test(as.numeric(x) ~ df[[class_label]])$p.value)
+  selected_metabolites <- df.results$Metabolites[df.results$wilcox <= threshold]
+  return(selected_metabolites)
+}
+
+filter_by_foldchange <- function(df, feature_cols, class_label, log2FC_threshold = 1,type1=1,type2=2) {
+  df.foldchange <- data.frame(Metabolites = feature_cols)
+  df.foldchange$log2FC <- apply(df[, feature_cols], 2, function(x) {
+    log2(mean(x[df[[class_label]] == type2]) / 
+           mean(x[df[[class_label]] == type1]))
+  })
+  selected_metabolites <- df.foldchange$Metabolites[abs(df.foldchange$log2FC) >= log2FC_threshold]
+  return(selected_metabolites)
+}
+
+select_metabolites <- function(df, feature_cols, class_label, method = "pvalue", threshold = 0.05, log2FC_threshold = 1) {
+  label_type_num <- length(unique(df[[class_label]]))
+  
+  selected_metabolites <- 
+    if (label_type_num > 2) {
+      filter_by_kruskal(df, feature_cols, class_label, threshold)
+    } else {
+      filter_by_wilcox(df, feature_cols, class_label, threshold)
+    }
+  
+  filter_by_foldchange(df, selected_metabolites, class_label, log2FC_threshold)
+  
+  
+  return(selected_metabolites)
 }
 
 filter_by_pvalue<-function(df.test,feature_cols,class_label,threshold=100){
@@ -457,34 +475,20 @@ draw_heatmap<-function(loaddata,feature_cols,class_label,ha_col,use_row_ha=FALSE
     return(p)
 }
 
-draw_single_heatmap<-function(df.raw,feature_num,class_label,pvalue_cutoff=0.05,use_row_ha=FALSE){
+draw_single_heatmap<-function(df.raw,feature_cols,class_label,use_row_ha=FALSE){
     print(class_label)
-    df.raw.log=log2(df.raw[,1:feature_num])
+    df.raw=df.raw[!is.na(df.raw[class_label]),]
+  
+    feature_num = length(feature_cols)
+    df.raw.log=log2(df.raw[,feature_cols])
     print(sum(is.na(df.raw.log)))
-
-    # df.raw.log[class_label]=df.raw[,class_label]
+    df.raw.log[class_label]=df.raw[,class_label]
     # df.raw.log=df.raw.log[!is.na(df.raw.log[class_label]),]
     # df.test=df.raw.log
 
-    # df.raw[class_label]=df.raw[,class_label]
-    df.raw=df.raw[!is.na(df.raw[class_label]),]
-    df.test=df.raw
-    print(sum(is.na(df.test)))
-
-    feature_cols=colnames(df.test)[1:feature_num]
-    # if pvalue_cutoff>=1{
-
-    # }else {
-    #     df.raw.selected=filter_by_pvalue(df.test,feature_cols ,class_label ,pvalue_cutoff)   
-
-    # }
-    df.raw.selected=filter_by_pvalue(df.test,feature_cols ,class_label ,pvalue_cutoff) 
-    metab_num.selected=ncol(df.raw.selected)-1
-    print(sum(is.na(df.test)))
-    loaddata=df.raw.selected
+    loaddata = df.raw.log[,c(feature_cols,class_label)]
     print(sum(is.na(loaddata)))
 
-    feature_cols=colnames(df.raw.selected)[1:metab_num.selected]
     p=draw_heatmap(loaddata ,feature_cols ,class_label,class_label,use_row_ha  )
     draw(
         p,  
@@ -493,6 +497,7 @@ draw_single_heatmap<-function(df.raw,feature_num,class_label,pvalue_cutoff=0.05,
     )
     # print(q)
     print('finished')
+    return(p)
 }
 
 ##### KEGG #####

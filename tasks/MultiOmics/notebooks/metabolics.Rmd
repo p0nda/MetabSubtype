@@ -19,7 +19,7 @@ library(KEGGREST)
 library(viridis)
 library(survminer)
 library(survival)
-
+library(dendextend)
 
 getwd()
 source("~/workstation/MetabSubtype/tasks/Subtype/notebooks/utils.R")
@@ -132,7 +132,7 @@ df.pathway_fc
 colnames(df.pathway_fc)
 df.pathway_fc[['fc']]
 df.pathway_fc['log2fc']=sapply(df.pathway_fc[['fc']],log2)
-pvalue.kmeans_pathway=pvalue_by_wilcox(df.use,rna_num,class_label)
+pvalue.kmeans_pathway=pvalue_by_wilcox(df.use,metab_num,class_label)
 pvalue.kmeans_pathway
 match(pvalue.kmeans_pathway[['Metabolites']],rownames(df.pathway_fc))
 df.pathway_fc$pvalue=pvalue.kmeans_pathway[match(pvalue.kmeans_pathway[['Metabolites']],rownames(df.pathway_fc)),'pvalue']
@@ -142,27 +142,72 @@ df.pathway_fc$pvalue=pvalue.kmeans_pathway[match(pvalue.kmeans_pathway[['Metabol
 
 ```{r}
 
-df.use=merge(df.raw_metab.scaled,df.cluster_result,by="row.names")
+class_label='kmeans_2_clusters'
+df.use=merge(df.raw_metab,df.cluster_result[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
-
+df.use[df.use[,1]<0,1]
 dim(df.use)
 p_cutoff=1e-2
 
-df.use=df.use[order(df.use[[class_label]]),]
-df.use[class_label]
+feature_cols=filter_by_foldchange(df.use,colnames(df.use)[1:(ncol(df.use)-1)],class_label,log2(1.5))
+
 
 filepath=paste0(dirpath,'metab_sig_heatmap_1e-2.pdf')
 pdf(filepath)
-draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',p_cutoff,FALSE )
+p=draw_single_heatmap(df.use,feature_cols,'kmeans_2_clusters',FALSE )
 dev.off()
 
 filepath=paste0(dirpath,'metab_all_heatmap.pdf')
 pdf(filepath)
-draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',1,FALSE )
+p=draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',FALSE )
 dev.off()
 
 # draw_single_heatmap(df.use,metab_num,'nmf_2_clusters',p_cutoff,FALSE )
+feature_cols=colnames(df.raw_metab)
+class_label='kmeans_2_clusters'
+type2=2
+type1=1
+  df.foldchange <- data.frame(Metabolites = feature_cols)
+  df.foldchange$log2FC <- apply(df.raw_metab[, feature_cols], 2, function(x) {
+    log2(mean(x[df.use[[class_label]] == type2]) / 
+           mean(x[df.use[[class_label]] == type1]))
+  })
+```
+
+```{r}
+mat=df.use[,c(feature_cols,class_label)]
+p = Heatmap(as.matrix(t(mat[,feature_cols])) , width = unit(10, "cm"),
+                     km = 12, 
+                     cluster_columns = F, 
+                     show_row_names = F, 
+                     row_title_rot = 0, 
+                     row_gap = unit(3, "mm"), 
+                     name = "Log2FC", 
+                     column_title = "Test Clusters",
+                     column_title_gp = gpar(fontfamily = "sans", fontsize = 28), 
+                     column_names_gp = gpar(fontfamily = "sans", fontsize = 20),
+                     col = mat[,class_label])
+p=draw_single_heatmap(df.use,feature_cols,'kmeans_2_clusters',FALSE )
+p = draw(p)
+rcl.list <- row_order(p)
+clu_df <- do.call(rbind, lapply(1:length(rcl.list), function(i){
+  out <- data.frame(GeneID = colnames(df.use[rcl.list[[i]],]),
+                    Cluster = paste0("cluster", i),
+                    stringsAsFactors = FALSE)
+  return(out)
+}))
+typeof(p)
+
+my_hclust_gene <- hclust(dist(t(df.use[,feature_cols])), method = "complete")
+
+as.dendrogram(my_hclust_gene) %>%
+  plot(horiz = TRUE)
+
+my_gene_col <- cutree(tree = as.dendrogram(my_hclust_gene), k = 20)
+my_gene_col <- data.frame(cluster = my_gene_col)
+my_gene_col
+my_gene_col[order(my_gene_col$cluster),]
 ```
 
 # KEGG
