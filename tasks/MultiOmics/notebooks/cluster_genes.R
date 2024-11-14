@@ -57,6 +57,8 @@ clu_df.heatmap <- do.call(rbind, lapply(1:length(rcl.list), function(i){
 dim(clu_df.heatmap)
 table(clu_df.heatmap$Cluster)
 
+# write.csv(clu_df.heatmap,'~/workstation/MetabSubtype/tasks/MultiOmics/results/20241114_cluster_genes/heatmap_10.csv')
+
 ##### Method 2: Hierarchical Clustering #####
 
 clu_df.hierachy = perform_hierarchy_clustering(mat, num_clusters)
