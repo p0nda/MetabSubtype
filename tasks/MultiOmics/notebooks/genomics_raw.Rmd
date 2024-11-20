@@ -174,7 +174,7 @@ v$E <- removeBatchEffect(v$E, batch=batch, design=design)
 dge <- estimateDisp(dge, design)
 # 后续可以使用limma进行差异表达分析
 fit <- glmFit(dge, design)
-
+edger.test.results=glmLRT(fit)$table
 logFC <- glmLRT(fit)$table$logFC
 dim(v$E)
 v_corrected.edger=as.data.frame(t(v$E))

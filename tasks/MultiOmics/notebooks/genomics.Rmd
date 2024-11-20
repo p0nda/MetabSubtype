@@ -3,7 +3,12 @@
 ## Keytypes
 
 ```{r}
-df.test_results=data.frame(ENSEMBL=colnames(v_corrected.edger))
+
+df.test_results=edger.test.results
+df.test_results$ENSEMBL = rownames(edger.test.results)
+colnames(df.test_results)[colnames(df.test_results) == "PValue"] ="pvalue"
+colnames(df.test_results)[colnames(df.test_results) == "logFC"] ="log2fc"
+# Map Different Names
 tmp_key=bitr(df.test_results[['ENSEMBL']], #数据集
   fromType="ENSEMBL", #输入为SYMBOL格式
   toType="SYMBOL",  # 转为ENTERZID格式
@@ -58,6 +63,12 @@ rownames(df.test_results)=df.test_results$ENSEMBL
 
 ```{r}
 sapply(patterns, function(p) str_detect(symbol, p))
+```
+
+```{r}
+
+
+edger.test.results
 ```
 
 # KEGG
@@ -156,8 +167,14 @@ for (description_name in wanted_pathways){
 
 ```{r}
 
+logfc_cutoff=log2(2)
+pvalue_cutoff=5e-2
+df.test_results$is_use=(df.test_results$pvalue<=pvalue_cutoff)&(abs(df.test_results$log2fc)>=logfc_cutoff)
+entrezid.sig=df.test_results[df.test_results$is_use,'ENTREZID']
+entrezid.sig=entrezid.sig[!is.na(entrezid.sig)]
+
 kegg_result=enrichKEGG(
-  na.omit(df.test_results[['ENTREZID']]),
+  na.omit(entrezid.sig),
   organism = "hsa",
   keyType = "kegg",
   pvalueCutoff = 1,
@@ -185,29 +202,8 @@ dirpath="~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figu
 # setwd(dirpath)
 class_label='kmeans_2_clusters'
 df.use_sample=df.sample
-df.use=merge(v_corrected.edger,df.cluster_result[,class_label,drop=FALSE],by="row.names")
-row.names(df.use)=df.use[[1]]
-df.use=df.use[,2:ncol(df.use)]
 
-pathway_matrix=df.use %>% group_by(!!sym(class_label)) %>% summarise_all(mean)
-dim(pathway_matrix)
-colnames(pathway_matrix)
-# Row Name Specified
-df.pathway_fc=as.data.frame(pathway_matrix)
-row.names(df.pathway_fc)=df.pathway_fc[[1]]
-df.pathway_fc=df.pathway_fc[,2:ncol(df.pathway_fc)]
-df.pathway_fc['fc',]=df.pathway_fc['2',]/df.pathway_fc['1',]
-df.pathway_fc=t(df.pathway_fc)
-df.pathway_fc=as.data.frame(df.pathway_fc)
-df.pathway_fc
-colnames(df.pathway_fc)
-df.pathway_fc[['fc']]
-df.pathway_fc['log2fc']=sapply(df.pathway_fc[['fc']],log2)
-pvalue.kmeans_pathway=pvalue_by_wilcox(df.use,rna_num,class_label)
-pvalue.kmeans_pathway
-match(pvalue.kmeans_pathway[['Metabolites']],rownames(df.pathway_fc))
-df.pathway_fc$pvalue=pvalue.kmeans_pathway[match(pvalue.kmeans_pathway[['Metabolites']],rownames(df.pathway_fc)),'pvalue']
-df.pathway_fc$is_sig=df.pathway_fc$pvalue<=5e-2
+df.test_results$is_sig = df.test_results$pvalue<=5e-2
 
 pvalue_cutoff=1
 use_row_ha=FALSE
