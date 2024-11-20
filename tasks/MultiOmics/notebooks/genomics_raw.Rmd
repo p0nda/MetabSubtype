@@ -157,17 +157,25 @@ dge <- DGEList(counts=t(x.raw_counts), group=group)
 # 计算样本的归一化因子
 dge <- calcNormFactors(dge)
 
-# 使用voom对数据进行预处理
 design <- model.matrix(~group)
+
+##### Method 1 #####
+
+normalized_counts <- cpm(dge, normalized.lib.sizes = TRUE)
+log_counts <- log2(normalized_counts + 1)
+batch_corrected_log <- removeBatchEffect(log_counts, batch = batch, design = model.matrix(~group))
+batch_corrected_counts <- 2^batch_corrected_log - 1
+##### Method 2 #####
+# 使用voom对数据进行预处理
 v <- voom(dge, design)
 
 # 使用 removeBatchEffect 去除批次效应
 v$E <- removeBatchEffect(v$E, batch=batch, design=design)
-
+dge <- estimateDisp(dge, design)
 # 后续可以使用limma进行差异表达分析
-fit <- lmFit(v, design)
-fit <- eBayes(fit)
+fit <- glmFit(dge, design)
 
+logFC <- glmLRT(fit)$table$logFC
 dim(v$E)
 v_corrected.edger=as.data.frame(t(v$E))
 rna_num=ncol(v_corrected.edger)

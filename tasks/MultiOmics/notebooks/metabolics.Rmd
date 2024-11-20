@@ -138,6 +138,19 @@ match(pvalue.kmeans_pathway[['Metabolites']],rownames(df.pathway_fc))
 df.pathway_fc$pvalue=pvalue.kmeans_pathway[match(pvalue.kmeans_pathway[['Metabolites']],rownames(df.pathway_fc)),'pvalue']
 ```
 
+# Consensus
+
+```{r}
+rcc = ConsensusClusterPlus(as.matrix(df.raw_metab.scaled), 
+                           maxK = 8, 
+                           reps = 100, 
+                           pItem = 0.8, 
+                           pFeature = 1,
+                           title = 'Metabolism',
+                           clusterAlg = "km",
+                           plot="pdf")
+```
+
 # Heatmap
 
 ```{r}
@@ -151,11 +164,13 @@ dim(df.use)
 p_cutoff=1e-2
 
 feature_cols=filter_by_foldchange(df.use,colnames(df.use)[1:(ncol(df.use)-1)],class_label,log2(1.5))
+feature_cols=filter_by_kruskal(df.use,colnames(df.use)[1:(ncol(df.use)-1)],class_label,1e-2)
+
 
 
 filepath=paste0(dirpath,'metab_sig_heatmap_1e-2.pdf')
-pdf(filepath)
-p=draw_single_heatmap(df.use,feature_cols,'kmeans_2_clusters',FALSE )
+pdf(filepath,10,5)
+draw_single_heatmap(df.use,feature_cols,'kmeans_2_clusters',FALSE )
 dev.off()
 
 filepath=paste0(dirpath,'metab_all_heatmap.pdf')
@@ -263,7 +278,7 @@ row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
 pvalue_cutoff=5
-fc_up_cutoff=1
+fc_up_cutoff=1.2
 fc_down_cutoff=1
 
 df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('2','1'))
@@ -409,7 +424,7 @@ df.use=df.use[,2:ncol(df.use)]
 
 # Upregulated
 pvalue_cutoff=5e-2
-fc_up_cutoff=1
+fc_up_cutoff=1.5
 fc_down_cutoff=1/1
 df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('1','2'))
 
@@ -465,7 +480,7 @@ kegg_table.down$comporison="I"
 
 # I upregulated too much
 kegg_table.down=kegg_table.down[order(kegg_table.down$pvalue,decreasing = TRUE),]
-kegg_table.down=kegg_table.down[(nrow(kegg_table.down)-3):nrow(kegg_table.down),]
+# kegg_table.down=kegg_table.down[(nrow(kegg_table.down)-3):nrow(kegg_table.down),]
 # II upregulated too much
 kegg_table.up=kegg_table.up[order(kegg_table.up$pvalue,decreasing = TRUE),]
 kegg_table.up=kegg_table.up[(nrow(kegg_table.up)-6):nrow(kegg_table.up),]

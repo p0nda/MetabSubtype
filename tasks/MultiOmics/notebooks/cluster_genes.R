@@ -1,6 +1,7 @@
 # Load necessary library
 library(stats)
-
+library(ggplot2)
+library(Rtsne)
 # Function to perform hierarchical clustering on RNA expression data
 perform_hierarchy_clustering <- function(rna_df, num_clusters = 3, method = "average") {
   
@@ -59,8 +60,57 @@ table(clu_df.heatmap$Cluster)
 
 # write.csv(clu_df.heatmap,'~/workstation/MetabSubtype/tasks/MultiOmics/results/20241114_cluster_genes/heatmap_10.csv')
 
-##### Method 2: Hierarchical Clustering #####
+##### Method 2: Kmeans Clustering #####
 
+clu_df.km <- kmeans(t(mat), centers = num_clusters)$cluster
+clu_df.km <- data.frame(
+  GeneID = names(clu_df.km),
+  Cluster = paste0("cluster", clu_df.km),
+  stringsAsFactors = FALSE
+)
+table(clu_df.km$Cluster)
+
+##### Method 3: Hierarchy #####
 clu_df.hierachy = perform_hierarchy_clustering(mat, num_clusters)
 
 table(clu_df.hierachy$Cluster)
+
+##### Visualisation ######
+mat = mat %>% distinct()
+dim(mat)
+set.seed(42)
+tsne_mat = t(mat)
+tsne_mat = as.data.frame(tsne_mat) %>% distinct()
+
+tsne_input <- as.matrix(tsne_mat)
+tsne_result <- Rtsne(tsne_input, dims = 2, perplexity = 30, verbose = TRUE)
+tsne_data <- as.data.frame(tsne_result$Y)
+colnames(tsne_data) <- c("tSNE1", "tSNE2")
+tsne_data$GeneID <- rownames(tsne_mat)
+
+tsne_data$KM = clu_df.km[match(tsne_data$GeneID,clu_df.km$GeneID),'Cluster']
+tsne_data$Heatmap = clu_df.heatmap[match(tsne_data$GeneID,clu_df.heatmap$GeneID),'Cluster']
+
+p1 = ggplot(tsne_data, aes(x = tSNE1, y = tSNE2)) +
+  geom_point(aes(color = KM), size = 0.1) +
+  labs(
+    title = "t-SNE of KM",
+    x = "t-SNE Dimension 1",
+    y = "t-SNE Dimension 2"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = rainbow(length(unique(tsne_data$KM))))
+
+
+p2 = ggplot(tsne_data, aes(x = tSNE1, y = tSNE2)) +
+  geom_point(aes(color = Heatmap), size = 0.1) +
+  labs(
+    title = "t-SNE of Heatmap",
+    x = "t-SNE Dimension 1",
+    y = "t-SNE Dimension 2"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = rainbow(length(unique(tsne_data$Heatmap))))
+
+combined_plot = p1 + p2
+print(combined_plot)

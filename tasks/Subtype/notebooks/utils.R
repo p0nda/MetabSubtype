@@ -466,12 +466,6 @@ draw_heatmap<-function(loaddata,feature_cols,class_label,ha_col,use_row_ha=FALSE
                                 # column_split = col_ha
                                 )
     }
-    
-    q=draw(
-        p,  
-        heatmap_legend_side = "left", 
-        annotation_legend_side = "left"
-    )
     return(p)
 }
 
