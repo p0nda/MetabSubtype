@@ -1,0 +1,28 @@
+,category,subcategory,ID,Description,GeneRatio,BgRatio,pvalue,p.adjust,qvalue,geneID,Count,FoldEnrich,symbol
+hsa01200,Metabolism,Global and overview maps,hsa01200,Carbon metabolism,18/20,116/8848,6.17E-33,2.10E-31,4.54E-32,5634/5230/2821/2027/230/2597/2026/55902/5631/226/22934/84532/80201/3098/3099/2203/6888/128,18,68.64827586,PRPS2/PGK1/GPI/ENO3/ALDOC/GAPDH/ENO2/ACSS2/PRPS1/ALDOA/RPIA/ACSS1/HKDC1/HK1/HK2/FBP1/TALDO1/ADH5
+hsa00010,Metabolism,Carbohydrate metabolism,hsa00010,Glycolysis / Gluconeogenesis,16/20,67/8848,8.01E-32,1.36E-30,2.95E-31,5230/2821/2027/230/2597/2026/55902/226/84532/80201/3098/3099/2203/124/128/126,16,105.6477612,PGK1/GPI/ENO3/ALDOC/GAPDH/ENO2/ACSS2/ALDOA/ACSS1/HKDC1/HK1/HK2/FBP1/ADH1A/ADH5/ADH1C
+hsa01230,Metabolism,Global and overview maps,hsa01230,Biosynthesis of amino acids,Oct-20,75/8848,1.78E-16,2.01E-15,4.36E-16,5634/5230/2027/230/2597/2026/5631/226/22934/6888,10,58.98666667,PRPS2/PGK1/ENO3/ALDOC/GAPDH/ENO2/PRPS1/ALDOA/RPIA/TALDO1
+hsa00030,Metabolism,Carbohydrate metabolism,hsa00030,Pentose phosphate pathway,Aug-20,31/8848,1.04E-15,8.85E-15,1.92E-15,5634/2821/230/5631/226/22934/2203/6888,8,114.1677419,PRPS2/GPI/ALDOC/PRPS1/ALDOA/RPIA/FBP1/TALDO1
+hsa04066,Environmental Information Processing,Signal transduction,hsa04066,HIF-1 signaling pathway,Sep-20,109/8848,7.01E-13,4.77E-12,1.03E-12,5230/2027/230/2597/2026/226/80201/3098/3099,9,36.52844037,PGK1/ENO3/ALDOC/GAPDH/ENO2/ALDOA/HKDC1/HK1/HK2
+hsa00051,Metabolism,Carbohydrate metabolism,hsa00051,Fructose and mannose metabolism,Jun-20,34/8848,7.54E-11,4.27E-10,9.26E-11,230/226/80201/3098/3099/2203,6,78.07058824,ALDOC/ALDOA/HKDC1/HK1/HK2/FBP1
+hsa00620,Metabolism,Carbohydrate metabolism,hsa00620,Pyruvate metabolism,May-20,47/8848,4.96E-08,2.41E-07,5.23E-08,55902/84532/124/128/126,5,47.06382979,ACSS2/ACSS1/ADH1A/ADH5/ADH1C
+hsa00524,Metabolism,Biosynthesis of other secondary metabolites,hsa00524,"Neomycin, kanamycin and gentamicin biosynthesis",Mar-20,May-48,9.85E-08,4.19E-07,9.07E-08,80201/3098/3099,3,265.44,HKDC1/HK1/HK2
+hsa01250,Metabolism,Global and overview maps,hsa01250,Biosynthesis of nucleotide sugars,Apr-20,37/8848,1.20E-06,4.52E-06,9.79E-07,2821/80201/3098/3099,4,47.82702703,GPI/HKDC1/HK1/HK2
+hsa00500,Metabolism,Carbohydrate metabolism,hsa00500,Starch and sucrose metabolism,Apr-20,40/8848,1.65E-06,5.60E-06,1.21E-06,2821/80201/3098/3099,4,44.24,GPI/HKDC1/HK1/HK2
+hsa00520,Metabolism,Carbohydrate metabolism,hsa00520,Amino sugar and nucleotide sugar metabolism,Apr-20,50/8848,4.09E-06,1.26E-05,2.74E-06,2821/80201/3098/3099,4,35.392,GPI/HKDC1/HK1/HK2
+hsa00052,Metabolism,Carbohydrate metabolism,hsa00052,Galactose metabolism,Mar-20,32/8848,4.70E-05,0.000133132,2.89E-05,80201/3098/3099,3,41.475,HKDC1/HK1/HK2
+hsa00350,Metabolism,Amino acid metabolism,hsa00350,Tyrosine metabolism,Mar-20,36/8848,6.73E-05,0.000175885,3.81E-05,124/128/126,3,36.86666667,ADH1A/ADH5/ADH1C
+hsa00071,Metabolism,Lipid metabolism,hsa00071,Fatty acid degradation,Mar-20,43/8848,0.00011507,0.000279456,6.06E-05,124/128/126,3,30.86511628,ADH1A/ADH5/ADH1C
+hsa04930,Human Diseases,Endocrine and metabolic disease,hsa04930,Type II diabetes mellitus,Mar-20,47/8848,0.000150322,0.000340731,7.38E-05,80201/3098/3099,3,28.23829787,HKDC1/HK1/HK2
+hsa04973,Organismal Systems,Digestive system,hsa04973,Carbohydrate digestion and absorption,Mar-20,52/8848,0.000203408,0.000432242,9.37E-05,80201/3098/3099,3,25.52307692,HKDC1/HK1/HK2
+hsa04910,Organismal Systems,Endocrine system,hsa04910,Insulin signaling pathway,Apr-20,138/8848,0.000226053,0.000452106,9.80E-05,80201/3098/3099/2203,4,12.82318841,HKDC1/HK1/HK2/FBP1
+hsa00830,Metabolism,Metabolism of cofactors and vitamins,hsa00830,Retinol metabolism,Mar-20,68/8848,0.000450746,0.00085141,0.000184516,124/128/126,3,19.51764706,ADH1A/ADH5/ADH1C
+hsa05230,Human Diseases,Cancer: overview,hsa05230,Central carbon metabolism in cancer,Mar-20,71/8848,0.000511837,0.000915918,0.000198496,80201/3098/3099,3,18.69295775,HKDC1/HK1/HK2
+hsa00982,Metabolism,Xenobiotics biodegradation and metabolism,hsa00982,Drug metabolism - cytochrome P450,Mar-20,73/8848,0.000555376,0.00094414,0.000204612,124/128/126,3,18.18082192,ADH1A/ADH5/ADH1C
+hsa00980,Metabolism,Xenobiotics biodegradation and metabolism,hsa00980,Metabolism of xenobiotics by cytochrome P450,Mar-20,79/8848,0.000700051,0.001133415,0.000245632,124/128/126,3,16.8,ADH1A/ADH5/ADH1C
+hsa00630,Metabolism,Carbohydrate metabolism,hsa00630,Glyoxylate and dicarboxylate metabolism,Feb-20,31/8848,0.002170298,0.003354097,0.000726894,55902/84532,2,28.54193548,ACSS2/ACSS1
+hsa00640,Metabolism,Carbohydrate metabolism,hsa00640,Propanoate metabolism,Feb-20,32/8848,0.002311852,0.00341752,0.000740639,55902/84532,2,27.65,ACSS2/ACSS1
+hsa04936,Human Diseases,Endocrine and metabolic disease,hsa04936,Alcoholic liver disease,Mar-20,144/8848,0.00392846,0.005565318,0.001206106,124/128/126,3,9.216666667,ADH1A/ADH5/ADH1C
+hsa03018,Genetic Information Processing,"Folding, sorting and degradation",hsa03018,RNA degradation,Feb-20,78/8848,0.013153457,0.017888702,0.003876808,2027/2026,2,11.34358974,ENO3/ENO2
+hsa05131,Human Diseases,Infectious disease: bacterial,hsa05131,Shigellosis,Mar-20,249/8848,0.017617796,0.023038656,0.004992898,80201/3098/3099,3,5.330120482,HKDC1/HK1/HK2
+hsa00230,Metabolism,Nucleotide metabolism,hsa00230,Purine metabolism,Feb-20,128/8848,0.033285769,0.041915413,0.009083836,5634/5631,2,6.9125,PRPS2/PRPS1
