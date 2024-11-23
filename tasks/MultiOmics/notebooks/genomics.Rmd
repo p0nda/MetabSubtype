@@ -3,7 +3,12 @@
 ## Keytypes
 
 ```{r}
-df.test_results=data.frame(ENSEMBL=colnames(v_corrected.edger))
+
+df.test_results=edger.test.results
+df.test_results$ENSEMBL = rownames(edger.test.results)
+colnames(df.test_results)[colnames(df.test_results) == "PValue"] ="pvalue"
+colnames(df.test_results)[colnames(df.test_results) == "logFC"] ="log2fc"
+# Map Different Names
 tmp_key=bitr(df.test_results[['ENSEMBL']], #数据集
   fromType="ENSEMBL", #输入为SYMBOL格式
   toType="SYMBOL",  # 转为ENTERZID格式
@@ -18,6 +23,12 @@ tmp_key=bitr(df.test_results[['ENSEMBL']], #数据集
   OrgDb="org.Hs.eg.db") #人类 数据库
 matched_indices <- match(df.test_results$ENSEMBL, tmp_key$ENSEMBL)
 df.test_results$ENTREZID <- tmp_key$ENTREZID[matched_indices]
+```
+
+```{r}
+ENSG00000132915
+v_corrected.edger[,'ENSG00000132915']
+
 ```
 
 ## Non-Coding
@@ -52,6 +63,12 @@ rownames(df.test_results)=df.test_results$ENSEMBL
 
 ```{r}
 sapply(patterns, function(p) str_detect(symbol, p))
+```
+
+```{r}
+
+
+edger.test.results
 ```
 
 # KEGG
@@ -104,8 +121,22 @@ writeLines(entrezid.sig, "entrezid_sig.txt")
 # GSEA
 
 ```{r}
-foldchanges=df.test_results[,'fc']
-names(foldchanges)=df.test_results[,'ENTREZID']
+
+
+pathway_name='methionine'
+pathway_id <- "hsa00270"
+# 获取通路信息
+pathway_info <- keggGet(pathway_id)
+# 提取基因信息
+genes <- pathway_info[[1]]$GENE
+# 将基因ID和名称分离
+gene_ids <- genes[seq(1, length(genes), 2)]
+gene_names <- genes[seq(2, length(genes), 2)]
+
+using.test_results=df.test_results[df.test_results$ENTREZID %in% gene_ids,]
+using.test_results=df.test_results
+foldchanges=using.test_results[,'fc']
+names(foldchanges)=using.test_results[,'ENTREZID']
 # gene_list<-na.omit(gene_list)
 gene_list=foldchanges
 gene_list = sort(gene_list, decreasing = TRUE)
@@ -119,7 +150,16 @@ gseaplot(kk2, by = "runningScore", title = kk2$Description[1], geneSetID = 1)
 head(kk2)
 
 description_name="Cysteine and methionine metabolism"
-gseaplot2(kk2,  title = description_name, geneSetID = which(kk2$Description==description_name))
+wanted_pathways=c('Purine metabolism')
+for (description_name in wanted_pathways){
+  p=gseaplot2(kk2,  title = description_name, geneSetID = which(kk2$Description==description_name))
+  
+  filepath_name=paste0('~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/gsea/',description_name,'.pdf')
+  pdf(filepath_name)
+  print(p)
+  dev.off()
+
+}
 
 ```
 
@@ -127,8 +167,14 @@ gseaplot2(kk2,  title = description_name, geneSetID = which(kk2$Description==des
 
 ```{r}
 
+logfc_cutoff=log2(2)
+pvalue_cutoff=5e-2
+df.test_results$is_use=(df.test_results$pvalue<=pvalue_cutoff)&(abs(df.test_results$log2fc)>=logfc_cutoff)
+entrezid.sig=df.test_results[df.test_results$is_use,'ENTREZID']
+entrezid.sig=entrezid.sig[!is.na(entrezid.sig)]
+
 kegg_result=enrichKEGG(
-  na.omit(df.test_results[['ENTREZID']]),
+  na.omit(entrezid.sig),
   organism = "hsa",
   keyType = "kegg",
   pvalueCutoff = 1,
@@ -156,29 +202,8 @@ dirpath="~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figu
 # setwd(dirpath)
 class_label='kmeans_2_clusters'
 df.use_sample=df.sample
-df.use=merge(v_corrected.edger,df.cluster_result[,class_label,drop=FALSE],by="row.names")
-row.names(df.use)=df.use[[1]]
-df.use=df.use[,2:ncol(df.use)]
 
-pathway_matrix=df.use %>% group_by(!!sym(class_label)) %>% summarise_all(mean)
-dim(pathway_matrix)
-colnames(pathway_matrix)
-# Row Name Specified
-df.pathway_fc=as.data.frame(pathway_matrix)
-row.names(df.pathway_fc)=df.pathway_fc[[1]]
-df.pathway_fc=df.pathway_fc[,2:ncol(df.pathway_fc)]
-df.pathway_fc['fc',]=df.pathway_fc['2',]/df.pathway_fc['1',]
-df.pathway_fc=t(df.pathway_fc)
-df.pathway_fc=as.data.frame(df.pathway_fc)
-df.pathway_fc
-colnames(df.pathway_fc)
-df.pathway_fc[['fc']]
-df.pathway_fc['log2fc']=sapply(df.pathway_fc[['fc']],log2)
-pvalue.kmeans_pathway=pvalue_by_wilcox(df.use,rna_num,class_label)
-pvalue.kmeans_pathway
-match(pvalue.kmeans_pathway[['Metabolites']],rownames(df.pathway_fc))
-df.pathway_fc$pvalue=pvalue.kmeans_pathway[match(pvalue.kmeans_pathway[['Metabolites']],rownames(df.pathway_fc)),'pvalue']
-df.pathway_fc$is_sig=df.pathway_fc$pvalue<=5e-2
+df.test_results$is_sig = df.test_results$pvalue<=5e-2
 
 pvalue_cutoff=1
 use_row_ha=FALSE
@@ -414,7 +439,7 @@ row_ha=rowAnnotation(sig=df.test_results[df.test_results$SYMBOL %in% queries,'is
 mat=as.matrix(df.test_results[df.test_results$SYMBOL %in% queries,'log2fc',drop=FALSE])
 rownames(mat)=df.test_results[match(rownames(mat),df.test_results$ENSEMBL),'SYMBOL']
 # mat=mat[order(mat),,drop=FALSE]
-bk=c(-1,0,1)
+bk=c(-2,0,2)
 col_fun<-colorRamp2(
   bk,
   c("#1D91C0", "white", "#E31A1C"))
@@ -500,6 +525,7 @@ if (pathway_name=='Purine metabolism'){
 }
 draw(p)
 dev.off()
+df.test_results[df.test_results$ENTREZID %in% rnas,]
 df.test_results[df.test_results$ENTREZID %in% rnas,c('SYMBOL','ENTREZID')]
 ```
 

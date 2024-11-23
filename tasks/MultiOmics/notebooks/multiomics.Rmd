@@ -391,10 +391,12 @@ which(kk2$Description==pathways_es_ordered[1])
 order_num=4
 gseaplot2(kk2,  title = pathways_es_ordered[order_num], geneSetID = which(kk2$Description==pathways_es_ordered[order_num]))
 
+kk2=gseKEGG(gene_list,organism = 'hsa',nPerm=1000,pvalueCutoff = 1)
+
 description_name='TNF signaling pathway'
 p=gseaplot2(kk2,  title = kk2$Description[which(kk2$Description==description_name)], geneSetID = which(kk2$Description==description_name))
 
-filepath_name=paste0('~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/gsea_',description_name,'.pdf')
+filepath_name=paste0('~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/gsea/',description_name,'.pdf')
 pdf(filepath_name)
 print(p)
 dev.off()
