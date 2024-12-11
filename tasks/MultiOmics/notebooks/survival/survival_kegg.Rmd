@@ -117,6 +117,9 @@ metabolites.shared <- readLines(paste0(src_dirpath,"metab_shared_sig_features.tx
 all_metabolites <- c(metabolites.shap, metabolites.stat, metabolites.shared)
 all_metabolites=unique(all_metabolites)
 all_metabolites=all_metabolites[all_metabolites!='s-adenosyl-l-homocysteine_pos']
+all_metabolites=all_metabolites[all_metabolites!='glutathione disulfide_neg']
+
+
 ```
 
 ## Preprocess
@@ -152,9 +155,73 @@ df.use[class_label]
 df.use=df.use[,c(all_metabolites,class_label)]
 # filepath=paste0(dirpath,'metab_sig_heatmap.pdf')
 # pdf(filepath)
-draw_single_heatmap(df.use,length(all_metabolites),class_label,p_cutoff,FALSE)
+draw_single_heatmap(df.use,all_metabolites,class_label,p_cutoff)
 # dev.off()
 
+```
+
+```{r}
+loaddata = df.use
+feature_cols = all_metabolites
+
+class_label = 'survival_level'
+ha_col = 'survival_level'
+use_row_ha=FALSE
+col_split=TRUE
+
+```
+
+```{r}
+   candidate_colors <- c("#8ea3c2",  "#8ccdbf", "#edb17f",  "#f1df82","#FEA3A2","#8E8BFE")
+    # candidate_colors=c("#FEA3A2","#8E8BFE","#")
+    mat=data.matrix(loaddata[,feature_cols])
+    rownames(mat)=rownames(loaddata)
+    mat=t(mat)
+    df.label_col=loaddata[,class_label]
+    df.ha=loaddata[,ha_col,drop=FALSE]
+    i=1
+    ha_color_mapping=c()
+    ha_color_mapping=candidate_colors[1:length(unique(df.ha[[ha_col]]))]
+    ha_color_mapping= setNames(ha_color_mapping,unique(df.ha[[ha_col]]))
+    color_list=NULL
+    color_list[[ha_col]]=ha_color_mapping
+    top_ha = HeatmapAnnotation(df=df.ha,col = color_list,
+        simple_anno_size=unit(4, "mm"),
+        #border = T,
+        gap = unit(1, "points"),
+        show_annotation_name = TRUE)
+    col_ha=df.label_col
+    break_low_boundary=-3
+    break_high_boundary=3
+    break_step_length=0.01
+    # bk <- c(seq(break_low_boundary,0,by=0.01),seq(0,break_high_boundary,by=0.01))
+    bk <- c(seq(break_low_boundary,break_high_boundary,by=break_step_length))
+    bk=c(-1.5,0,1.5)
+    col_fun<-colorRamp2(
+        bk,
+        c("#1D91C0", "white", "#E31A1C"))
+
+        row_ha=data.frame(lipid=feature_cols)
+        row_ha$headgroup=str_extract(feature_cols,'([A-Z]*[a-z]*)*')
+        row_ha=as.vector(row_ha$headgroup)
+p<-ComplexHeatmap::pheatmap(mat,
+                                    col = col_fun,
+                                    name = "Relative level",
+                                    column_split = col_ha,
+                                    top_annotation=top_ha,
+                                    cluster_row_slices=F,
+                                    fontsize_row = 7, 
+                                    cluster_cols = T,
+                                    row_title_rot = 0,
+                                    fontsize_col = 5,
+                                    treeheight_row = 20,
+                                    treeheight_col = 20,
+                                    row_title_gp = gpar(fontsize = 7),
+                                    legend_breaks=seq(break_low_boundary,break_high_boundary,(break_high_boundary-break_low_boundary)/4),
+                                    scale="row",
+                                    breaks = bk
+                                )
+p
 ```
 
 # KEGG
@@ -183,7 +250,6 @@ fc_down_cutoff=1
 
 df.test.results.mt2=kegg_before_process(df.use,metab_num,class_label,types=c('high','low'))
 # Key process to control upregulate
-df.test.results.mt2=df.test.results.mt2[df.test.results.mt2$log2FC>0,]
 kegg_table=kegg_after_process(df.test.results.mt2,pvalue_cutoff,fc_up_cutoff,fc_down_cutoff)
 kegg_table
 
@@ -214,7 +280,7 @@ p=ggplot(kegg_table_draw, aes(-log10(FDR), Description)) +
   #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
   theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
   # coord_fixed(ratio = 0.4) +
-  labs(x = "-Log10(FDR)", y = "", title = "", 
+  labs(x = "-Log10(FDR)", y = "", title = "Overall", 
        fill = "-Log10(FDR)", size = "Enrich Ratio") +
   theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
         axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
@@ -277,6 +343,34 @@ kegg_draw_process<-function(kegg_table_draw){
 kegg_table_draw.up=kegg_draw_process(kegg_table_draw.up)
 kegg_table_draw.down=kegg_draw_process(kegg_table_draw.down)
 
+
+df.test.results.down
+```
+
+```{r}
+kegg_table_draw.up = kegg_table_draw.up[order(kegg_table_draw.up$FDR,decreasing = TRUE),]
+p=ggplot(kegg_table_draw.up, aes(-log10(FDR), Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw.up[['Description']])+
+  scale_size(range = c(3, 15), breaks = c(seq(10,30,5))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(0,2,0.5)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "UP", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+print(p)
+```
+
+```{r}
+kegg_table_draw
 ```
 
 ## Up
@@ -284,7 +378,7 @@ kegg_table_draw.down=kegg_draw_process(kegg_table_draw.down)
 ```{r}
 p=ggplot(kegg_table_draw.up, aes(-log10(FDR), Description)) +
   geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
-  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_y_discrete(limits = kegg_table_draw.up[['Description']])+
   scale_size(range = c(3, 15), breaks = c(seq(0,10,2))) +
   # scale_color_gradient(low="blue",high = "red")+
   scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(0,2,0.5)))+
@@ -327,4 +421,18 @@ p=ggplot(kegg_table_draw.all, aes(comporison, Description)) +
         legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
 
 print(p)
+```
+
+# Volcano
+
+```{r}
+
+df.test.results.mt2
+
+volcano.test_results=df.test.results.mt2
+volcano.test_results$fc = volcano.test_results$FC
+colnames(volcano.test_results)[colnames(volcano.test_results) == "log2fc"] ="log2FC"
+colnames(volcano.test_results)[colnames(volcano.test_results) == "wilcox"] ="pvalue"
+
+draw_volcano(volcano.test_results,0.5,1)
 ```

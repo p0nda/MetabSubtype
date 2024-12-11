@@ -40,10 +40,12 @@ source("~/workstation/MetabSubtype/tasks/Subtype/notebooks/utils.R")
 ##### Metab #####
 # filepath.rna_counts='D:/repositories/liver-cancer/tasks/Tissue/results/20231202/csvs/lipid.csv'
 filepath.raw_counts='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/rna/counts.csv'
-filepath.sample='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/Using/sample.csv'
+filepath.sample='/home/suh/workstation/MetabSubtype/tasks/Subtype/data/Using/whole_sample_info.csv'
 filepath.cluster_result='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/metab/cluster_result.csv'
+filepath.cluster_result='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/lipid/cluster_result.csv'
+
 df.raw_counts<-read.csv(filepath.raw_counts, header= TRUE, check.names=F,row.names=1)
-df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
+df.sample <- read.csv(filepath.sample, header= TRUE, check.names=F, row.names=1)
 df.cluster_result<-read.csv(filepath.cluster_result, header= TRUE, check.names=F,row.names=1)
 df.raw_counts[1:5,1:5]
 dim(df.raw_counts)
@@ -74,9 +76,10 @@ df.raw_counts[,ncol(df.raw_counts),drop=FALSE]
 ```
 
 ```{r}
-df.using=merge(df.raw_counts,df.cluster_result,by="row.names")
+df.using=merge(df.raw_counts,df.sample[,(ncol(df.sample)-2):ncol(df.sample)],by="row.names")
 rownames(df.using)=df.using[,1]
 df.using=df.using[,2:ncol(df.using)]
+df.using = df.using[!is.na(df.using[class_label]),]
 x.raw_counts=df.using[,1:ncol(df.raw_counts)]
 x.cluster_result=df.using[,(ncol(df.raw_counts)+1):ncol(df.using)]
 for (col in colnames(x.cluster_result)){
@@ -84,7 +87,7 @@ for (col in colnames(x.cluster_result)){
 }
 str(x.cluster_result)
 
-class_label='kmeans_2_clusters'
+class_label='lipid_cluster'
 group=factor(x.cluster_result[[class_label]])
 batch=factor(x.cluster_result[['batch']])
 ```
@@ -136,29 +139,36 @@ combat_edata3 = ComBat(dat=edata, batch=batch, mod=mod, par.prior=TRUE, ref.batc
 ### Preprocess
 
 ```{r}
-df.using=merge(df.raw_counts,df.cluster_result,by="row.names")
+
+class_label='metab_cluster'
+df.using=merge(df.raw_counts,df.sample[,c("batch",'metab_cluster','lipid_cluster')],by="row.names")
 rownames(df.using)=df.using[,1]
 df.using=df.using[,2:ncol(df.using)]
+df.using = df.using[!is.na(df.using[class_label]),]
+
+# Build matrix for DGE
 x.raw_counts=df.using[,1:ncol(df.raw_counts)]
 x.cluster_result=df.using[,(ncol(df.raw_counts)+1):ncol(df.using)]
 for (col in colnames(x.cluster_result)){
   x.cluster_result[col]=as.factor(x.cluster_result[[col]])
 }
-
-class_label='kmeans_2_clusters'
+dim(df.raw_counts)
+length(group)
 group=factor(x.cluster_result[[class_label]])
 batch=factor(x.cluster_result[['batch']])
 length(group)
 ```
 
 ```{r}
-dge <- DGEList(counts=t(x.raw_counts), group=group)
+dge <- DGEList(counts=t(df.using[,1:(ncol(df.using)-3)]), group=group)
 
 # 计算样本的归一化因子
 dge <- calcNormFactors(dge)
 
 design <- model.matrix(~group)
-
+dim(df.using)
+length(group)
+length(design)
 ##### Method 1 #####
 
 normalized_counts <- cpm(dge, normalized.lib.sizes = TRUE)
@@ -168,7 +178,8 @@ batch_corrected_counts <- 2^batch_corrected_log - 1
 ##### Method 2 #####
 # 使用voom对数据进行预处理
 v <- voom(dge, design)
-
+dim(design)
+dim(dge$counts)
 # 使用 removeBatchEffect 去除批次效应
 v$E <- removeBatchEffect(v$E, batch=batch, design=design)
 dge <- estimateDisp(dge, design)
@@ -180,6 +191,10 @@ dim(v$E)
 v_corrected.edger=as.data.frame(t(v$E))
 rna_num=ncol(v_corrected.edger)
 
+mean_group1 <- mean(df.using[df.using[class_label]==1,'ENSG00000116748' ])
+mean_group2 <- mean(df.using[df.using[class_label]==2,'ENSG00000116748' ])
+mean_group1
+mean_group2
 # write.csv(v_corrected.edger,'~/workstation/MetabSubtype/tasks/MultiOmics/data/rna/edger.csv')
 ```
 

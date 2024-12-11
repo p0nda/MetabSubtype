@@ -78,7 +78,6 @@ get_grep_df <- function(lipid_df, lipid_num) {
 
 drop_odd_chain_cols <- function(df) {
     odd_chainlength_cols <- character(0)
-    df=df.raw_metab
     for(col in colnames(df)){
         chain_lengths <- as.integer(regmatches(col, gregexpr("\\d+", col))[[1]])
         chain_length_index=1
@@ -426,6 +425,8 @@ draw_heatmap<-function(loaddata,feature_cols,class_label,ha_col,use_row_ha=FALSE
     if(use_row_ha){
         row_ha=data.frame(lipid=feature_cols)
         row_ha$headgroup=str_extract(feature_cols,'([A-Z]*[a-z]*)*')
+        target_headgroups <- c('Cer', 'AcCa', 'LPC', 'LPE', 'SM', 'PC', 'PE', 'PG', 'PI', 'PS', 'TAG', 'DAG', 'TG')
+        row_ha$headgroup <- ifelse(row_ha$headgroup %in% target_headgroups, lipid_classes, "others")
         row_ha=as.vector(row_ha$headgroup)
         p<-ComplexHeatmap::pheatmap(mat,
                                     col = col_fun,

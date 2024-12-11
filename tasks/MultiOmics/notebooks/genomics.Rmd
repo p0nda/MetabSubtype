@@ -3,7 +3,7 @@
 ## Keytypes
 
 ```{r}
-
+dirpath = '~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/metab/rna_pathway_heatmap/'
 df.test_results=edger.test.results
 df.test_results$ENSEMBL = rownames(edger.test.results)
 colnames(df.test_results)[colnames(df.test_results) == "PValue"] ="pvalue"
@@ -23,6 +23,10 @@ tmp_key=bitr(df.test_results[['ENSEMBL']], #数据集
   OrgDb="org.Hs.eg.db") #人类 数据库
 matched_indices <- match(df.test_results$ENSEMBL, tmp_key$ENSEMBL)
 df.test_results$ENTREZID <- tmp_key$ENTREZID[matched_indices]
+df.test_results$is_sig = FALSE
+df.test_results[df.test_results$pvalue <= 5e-2,'is_sig'] = TRUE
+
+# write.csv(df.test_results,"~/workstation/MetabSubtype/tasks/MultiOmics/data/rna/metab_cluster_test_results.csv")
 ```
 
 ```{r}
@@ -62,13 +66,44 @@ rownames(df.test_results)=df.test_results$ENSEMBL
 ```
 
 ```{r}
-sapply(patterns, function(p) str_detect(symbol, p))
+library(stringr)
+
+# Vectorized pattern detection
+pattern_matches <- rowSums(sapply(patterns, function(p) str_detect(symbols, p))) == 0
+
+# Subset the data based on the vectorized result
+keep.symbols <- df.test_results[df.test_results$SYMBOL %in% symbols[pattern_matches], 'ENSEMBL']
+length(keep.symbols)
+
+df.test_results$CODING = 0
+df.test_results[keep.symbols,'CODING'] = 1
 ```
 
 ```{r}
 
 
 edger.test.results
+```
+
+## Lipid List
+
+```{r}
+filepath.lipid_genes='/home/suh/workstation/MetabSubtype/tasks/MultiOmics/data/lipid/GO_lipid metabolism related genes_log2_RPKM.csv'
+df.lipid_genes = read.csv(filepath.lipid_genes,check.names = FALSE)
+
+dim(df.lipid_genes)
+
+dim(df.test_results[df.test_results$is_lipid,])
+```
+
+```{r}
+genes.lipid = df.lipid_genes$GeneSymbol
+
+df.test_results$is_lipid = toupper(df.test_results$SYMBOL) %in% toupper(genes.lipid) 
+
+dim(df.test_results[df.test_results$is_lipid == TRUE,])
+
+df.test_results[df.test_results$is_lipid == TRUE,]
 ```
 
 # KEGG
@@ -83,13 +118,21 @@ entrezid.sig=df.test_results[df.test_results$is_use,'ENTREZID']
 entrezid.sig=entrezid.sig[!is.na(entrezid.sig)]
 length(entrezid.sig)
 
+entrezid.lipid = df.test_results[df.test_results$is_lipid,'ENTREZID']
+entrezid.lipid.sig=df.test_results[(df.test_results$is_use)&(df.test_results$is_lipid),'ENTREZID']
+entrezi.sig = df.test_results[(df.test_results$is_use),'ENTREZID']
+
 entrezid.universe=df.test_results[['ENTREZID']]
 entrezid.universe=entrezid.universe[!is.na(entrezid.universe)]
 length(entrezid.universe)
 
 df.test_results.up=df.test_results[df.test_results$log2fc>0,]
-df.test_results.down=df.test_results[df.test_results$log2fc<0,]
+entrezid.sig.up = df.test_results.up[df.test_results.up$is_use,'ENTREZID']
+entrezid.sig.up=entrezid.sig.up[!is.na(entrezid.sig.up)]
 
+df.test_results.down=df.test_results[df.test_results$log2fc<0,]
+entrezid.sig.down = df.test_results.down[df.test_results.down$is_use,'ENTREZID']
+entrezid.sig.down = entrezid.sig.down[!is.na(entrezid.sig.down)]
 
 kegg_result=enrichKEGG(
   entrezid.sig,
@@ -111,11 +154,232 @@ kegg_table$FoldEnrich <- apply(kegg_table, 1,
                                  as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
                                  as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
 kegg_table$symbol=apply(kegg_table,1,get_symbols)
+
+write.csv(df.test_results.up,"~/workstation/MetabSubtype/tasks/MultiOmics/results/lipid_up.csv")
+write.csv(df.test_results.down,"~/workstation/MetabSubtype/tasks/MultiOmics/results/lipid_down.csv")
+```
+
+## Up
+
+```{r}
+
+kegg_result=enrichKEGG(
+  entrezid.sig.up,
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  universe = entrezid.universe,
+  use_internal_data = FALSE
+)
+kegg_table.up <- na.omit(as.data.frame(kegg_result))
+
+kegg_table.up$FoldEnrich <- apply(kegg_table.up, 1, 
+                               function(x) as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[1])/
+                                 as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+kegg_table.up$symbol=apply(kegg_table.up,1,get_symbols)
+
+kegg_table.up$comporison = 'II'
+```
+
+## Down
+
+```{r}
+
+kegg_result=enrichKEGG(
+  entrezid.sig.down,
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  universe = entrezid.universe,
+  use_internal_data = FALSE
+)
+kegg_table.down <- na.omit(as.data.frame(kegg_result))
+
+kegg_table.down$FoldEnrich <- apply(kegg_table.down, 1, 
+                               function(x) as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[1])/
+                                 as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+kegg_table.down$symbol=apply(kegg_table.down,1,get_symbols)
+
+kegg_table.down$comporison = 'I'
+```
+
+## Comporison
+
+```{r}
+unwanted_pathways = c()
+kegg_table_draw = rbind(kegg_table.up,kegg_table.down)
+# write.csv(kegg_table_draw,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/rna_lipid_kegg.csv")
+kegg_table_draw=kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+p=ggplot(kegg_table_draw, aes(comporison, Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(3, 13), breaks = c(seq(0,10,2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(2,8,2)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+pdf("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/rna_lipid_I_II_upregulated.pdf",10,8)
+print(p)
+dev.off()
+```
+
+## Lipid Specific
+
+```{r}
+
+
+logfc_cutoff=log2(2)
+pvalue_cutoff=5e-2
+df.test_results$is_use=(df.test_results$pvalue<=pvalue_cutoff)&(abs(df.test_results$log2fc)>=logfc_cutoff)
+
+entrezid.lipid = df.test_results[df.test_results$is_lipid,'ENTREZID']
+entrezid.lipid.sig=df.test_results[(df.test_results$is_use)&(df.test_results$is_lipid),'ENTREZID']
+
+
+kegg_result=enrichKEGG(
+  entrezid.lipid.sig,
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  universe = entrezid.universe,
+  use_internal_data = FALSE
+)
+kegg_table <- na.omit(as.data.frame(kegg_result))
+
+kegg_table$FoldEnrich <- apply(kegg_table, 1, 
+                               function(x) as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[1])/
+                                 as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+kegg_table$symbol=apply(kegg_table,1,get_symbols)
+
+
+```
+
+### Up Down
+
+```{r}
+
+df.test_results.up=df.test_results[df.test_results$log2fc>0,]
+# entrezid.sig.up = df.test_results.up[(df.test_results.up$is_lipid)&(df.test_results.up$is_use),'ENTREZID']
+entrezid.sig.up = df.test_results.up[(df.test_results.up$is_lipid),'ENTREZID']
+entrezid.sig.up = entrezid.sig.up[!is.na(entrezid.sig.up)]
+
+df.test_results.down=df.test_results[df.test_results$log2fc<0,]
+entrezid.sig.down = df.test_results.down[(df.test_results.down$is_lipid)&(df.test_results.down$is_use),'ENTREZID']
+entrezid.sig.down = df.test_results.down[(df.test_results.down$is_lipid),'ENTREZID']
+entrezid.sig.down = entrezid.sig.down[!is.na(entrezid.sig.down)]
+
+length(entrezid.sig.up)
+length(entrezid.sig.down)
+
+# UP
+kegg_result=enrichKEGG(
+  entrezid.sig.up,
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  universe = entrezid.universe,
+  use_internal_data = FALSE
+)
+kegg_table.up <- na.omit(as.data.frame(kegg_result))
+
+kegg_table.up$FoldEnrich <- apply(kegg_table.up, 1, 
+                               function(x) as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[1])/
+                                 as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+kegg_table.up$symbol=apply(kegg_table.up,1,get_symbols)
+
+kegg_table.up$comporison = 'II'
+
+# DOWN
+kegg_result=enrichKEGG(
+  entrezid.sig.down,
+  organism = "hsa",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 1,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  universe = entrezid.universe,
+  use_internal_data = FALSE
+)
+kegg_table.down <- na.omit(as.data.frame(kegg_result))
+
+kegg_table.down$FoldEnrich <- apply(kegg_table.down, 1, 
+                               function(x) as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[1])/
+                                 as.numeric(unlist(strsplit(x[['GeneRatio']], '[/]'))[2])*
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[2])/
+                                 as.numeric(unlist(strsplit(x[['BgRatio']], '[/]'))[1]))
+kegg_table.down$symbol=apply(kegg_table.down,1,get_symbols)
+
+kegg_table.down$comporison = 'I'
 ```
 
 ```{r}
-length(entrezid.sig)
-writeLines(entrezid.sig, "entrezid_sig.txt")
+kegg_table.up[kegg_table.up$qvalue < 5e-2,]
+kegg_table.down[kegg_table.down$qvalue < 5e-2,]
+```
+
+```{r}
+write.csv(kegg_table_draw,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/rna_lipid_specific.csv")
+kegg_table_draw = rbind(kegg_table.up,kegg_table.down)
+kegg_table_draw = na.omit(kegg_table_draw)
+kegg_table_draw = kegg_table_draw[!kegg_table_draw$Description %in% unwanted_pathways,]
+kegg_table_draw = kegg_table_draw[order(kegg_table_draw$FoldEnrich,decreasing=TRUE),]
+# kegg_table_draw = kegg_table_draw[1:10,]
+names(kegg_table_draw)[names(kegg_table_draw) == "p.adjust"] <- "FDR"
+p=ggplot(kegg_table_draw, aes(comporison, Description)) +
+  geom_point(aes(fill = -log10(FDR), size = FoldEnrich), color = "black", shape = 21) +
+  scale_y_discrete(limits = kegg_table_draw[['Description']])+
+  scale_size(range = c(3, 13), breaks = c(seq(10,20,2))) +
+  # scale_color_gradient(low="blue",high = "red")+
+  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(seq(1,50,10)))+
+  #  scale_fill_viridis_c(option = "A", direction = -1, begin = 0.4, breaks = c(0.2,0.5, 1, 1.5)) +
+  theme(plot.margin = margin(1, 1, 1, 1, "cm")) +
+  # coord_fixed(ratio = 0.4) +
+  labs(x = "-Log10(FDR)", y = "", title = "", 
+       fill = "-Log10(FDR)", size = "Enrich Ratio") +
+  theme(axis.text.x = element_text(size = 20, face = "plain", colour = "black",angle = 45,hjust = 1), 
+        axis.text.y = element_text(size = 18, face = "plain", colour = "black")) +
+  theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.title = element_text(size = 10, face = "plain", colour = "black"), 
+        legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
+
+pdf("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/kegg/rna_lipid_gene_specific_sig.pdf",10,5)
+print(p)
+dev.off()
 ```
 
 # GSEA
@@ -123,38 +387,31 @@ writeLines(entrezid.sig, "entrezid_sig.txt")
 ```{r}
 
 
-pathway_name='methionine'
-pathway_id <- "hsa00270"
-# 获取通路信息
-pathway_info <- keggGet(pathway_id)
-# 提取基因信息
-genes <- pathway_info[[1]]$GENE
-# 将基因ID和名称分离
-gene_ids <- genes[seq(1, length(genes), 2)]
-gene_names <- genes[seq(2, length(genes), 2)]
-
-using.test_results=df.test_results[df.test_results$ENTREZID %in% gene_ids,]
 using.test_results=df.test_results
-foldchanges=using.test_results[,'fc']
+using.test_results$fc=2^(using.test_results$log2fc)
+foldchanges=using.test_results[,"fc"]
 names(foldchanges)=using.test_results[,'ENTREZID']
 # gene_list<-na.omit(gene_list)
 gene_list=foldchanges
 gene_list = sort(gene_list, decreasing = TRUE)
 
+length(gene_list)
+length(unique(gene_list))
+gene_list[duplicated(gene_list)]
 kk2=gseKEGG(gene_list,organism = 'hsa',nPerm=1000,pvalueCutoff = 1)
 length(gene_list)
 
 df.kk2=as.data.frame(kk2)
-df.kk2=df.kk2[order(abs(df.kk2$enrichmentScore)),]
+df.kk2=df.kk2[order(-abs(df.kk2$enrichmentScore)),]
 gseaplot(kk2, by = "runningScore", title = kk2$Description[1], geneSetID = 1)
 head(kk2)
 
-description_name="Cysteine and methionine metabolism"
-wanted_pathways=c('Purine metabolism')
+description_name="Regulation of lipolysis in adipocytes"
+wanted_pathways=c('Regulation of lipolysis in adipocytes','Longevity regulating pathway','Type II diabetes mellitus')
 for (description_name in wanted_pathways){
   p=gseaplot2(kk2,  title = description_name, geneSetID = which(kk2$Description==description_name))
   
-  filepath_name=paste0('~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/gsea/',description_name,'.pdf')
+  filepath_name=paste0('~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/gsea/metab/',description_name,'.pdf')
   pdf(filepath_name)
   print(p)
   dev.off()
@@ -358,7 +615,7 @@ if (pathway_name=='Purine metabolism'){
 }
 draw(p)
 dev.off()
-df.test_results[df.test_results$ENTREZID %in% rnas,]
+df.test_results[df.test_results$ENTREZID %in% rnas,c('log2fc','SYMBOL','ENTREZID')]
 ```
 
 ### Pentose
@@ -434,6 +691,7 @@ df.test_results[df.test_results$ENTREZID %in% gene_ids,]
 # Filter
 rnas <- df.test_results[abs(df.test_results$log2fc)>log2(1)&(df.test_results$pvalue<5e-2)&(df.test_results$ENTREZID %in% gene_ids),'ENTREZID']
 
+rnas=c(rnas,na.omit(df.test_results[df.test_results$SYMBOL == "GNMT",][['ENTREZID']]))
 queries=df.test_results[match(rnas,df.test_results$ENTREZID),'SYMBOL']  
 row_ha=rowAnnotation(sig=df.test_results[df.test_results$SYMBOL %in% queries,'is_sig'],col=list(sig=c('TRUE'='yellow','FALSE'='white')))
 mat=as.matrix(df.test_results[df.test_results$SYMBOL %in% queries,'log2fc',drop=FALSE])
@@ -454,7 +712,6 @@ p=ComplexHeatmap::pheatmap(mat,
                          # scale="col"
                          
 )
-print(p)
 # Sys.sleep(3)
 pathway_name=str_replace_all(pathway_name,'/','_')
 pathway_name=str_replace_all(pathway_name,',','_')
@@ -469,7 +726,8 @@ if (pathway_name=='Purine metabolism'){
 }
 draw(p)
 dev.off()
-df.test_results[df.test_results$ENTREZID %in% rnas,]
+df.test_results[df.test_results$ENTREZID %in% rnas,c('log2fc','SYMBOL','ENTREZID')]
+
 ```
 
 ### Purine
@@ -526,7 +784,7 @@ if (pathway_name=='Purine metabolism'){
 draw(p)
 dev.off()
 df.test_results[df.test_results$ENTREZID %in% rnas,]
-df.test_results[df.test_results$ENTREZID %in% rnas,c('SYMBOL','ENTREZID')]
+df.test_results[df.test_results$ENTREZID %in% rnas,c('SYMBOL','ENTREZID','ENSEMBL')]
 ```
 
 ## Heatmap
@@ -563,9 +821,9 @@ wilcox.test(loaddata[['']] ~ loaddata[,class_label], data = df.test, exact = FAL
 
 ```{r}
 
-pathway_name='glycolysis'
+pathway_name='Regulation of lipolysis in adipocytes'
 # 指定目标KEGG通路，例如hsa04110（自噬通路）
-pathway_id <- "hsa00010"
+pathway_id <- "hsa04923"
 # 获取通路信息
 pathway_info <- keggGet(pathway_id)
 # 提取基因信息
@@ -577,6 +835,7 @@ gene_names <- genes[seq(2, length(genes), 2)]
 queries=df.test_results[match(gene_ids,df.test_results$ENTREZID),'SYMBOL'] 
 
 volcano.test_results=df.test_results
+volcano.test_results$fc = 2^(volcano.test_results$log2fc)
 colnames(volcano.test_results)[colnames(volcano.test_results) == "fc"] ="FC"
 colnames(volcano.test_results)[colnames(volcano.test_results) == "log2fc"] ="log2FC"
 

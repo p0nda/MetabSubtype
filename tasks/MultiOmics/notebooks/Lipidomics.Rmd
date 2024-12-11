@@ -23,7 +23,7 @@ library(gridExtra)
 library(factoextra)
 
 getwd()
-source('~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/utils.R')
+source('~/workstation/MetabSubtype/tasks/Subtype/notebooks/utils.R')
 
 ```
 
@@ -39,67 +39,68 @@ source('~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/utils.R')
 
 ```{r}
 
-##### Metab #####
+##### Lipid #####
 LABEL_NUM=0
-filepath.metab='~/workstation/MetabSubtype/tasks/Subtype/data/Using/lipid.csv'
-filepath.sample='~/workstation/MetabSubtype/tasks/Subtype/data/Using/sample.csv'
-df.metab<-read.csv(filepath.metab, header= TRUE, check.names=F,row.names=1)
-dim(df.metab)
+filepath.lipid='~/workstation/MetabSubtype/tasks/Subtype/data/Using/lipid.csv'
+filepath.sample='/home/suh/workstation/MetabSubtype/tasks/Subtype/data/Using/whole_sample_info.csv'
+df.lipid<-read.csv(filepath.lipid, header= TRUE, check.names=F,row.names=1)
+dim(df.lipid)
 df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
-length(unique((df.metab[,1])))
-df.metab[df.metab=='']=NA
-dim(df.metab)
+length(unique((df.lipid[,1])))
+df.lipid[df.lipid=='']=NA
+dim(df.lipid)
 
 df.sample[df.sample=='']=NA
 df.sample[df.sample=='Neg']=NA
 # df.sample=df.sample[!is.na(df.sample['Sample Name']),c('Sample Name','主要分型','生存时间分组','MT2结构')]
 df.sample=df.sample[!is.na(df.sample['Sample Name']),]
 row.names(df.sample)=df.sample[['Sample Name']]
-df.sample=df.sample[rownames(df.metab),]
+df.sample=df.sample[rownames(df.lipid),]
 df.sample[match('1520',rownames(df.sample)),'oss']=0
-dim(df.metab)
-metab_num=ncol(df.metab)
-df.raw_metab=df.metab[,1:metab_num]
+dim(df.lipid)
+lipid_num=ncol(df.lipid)
+df.raw_lipid=df.lipid[,1:lipid_num]
 dim(df.sample)
-dim(merge(df.metab,df.sample,by.x="row.names",by.y="Sample Name"))
+dim(merge(df.lipid,df.sample,by.x="row.names",by.y="Sample Name"))
 # Odd Chain
-dim(df.raw_metab)
-df.raw_metab=drop_odd_chain_cols(df.raw_metab)
-dim(df.raw_metab)
-metab_num=dim(df.raw_metab)[2]
+dim(df.raw_lipid)
+df.raw_lipid=drop_odd_chain_cols(df.raw_lipid)
+dim(df.raw_lipid)
+lipid_num=dim(df.raw_lipid)[2]
 # Normalize Data
-df.raw_metab.log=log2(df.raw_metab)
-df.raw_metab.scaled=df.raw_metab.log
-raw_metab_mean=apply(df.raw_metab.log,1,mean)
-raw_metab_std=apply(df.raw_metab.log,1,sd)
-df.raw_metab.scaled=(df.raw_metab.scaled-raw_metab_mean)/raw_metab_std
-# df.raw_metab.scaled=scale(df.raw_metab.log, center = TRUE, scale = TRUE)
+df.raw_lipid.log=log2(df.raw_lipid)
+df.raw_lipid.scaled=df.raw_lipid.log
+raw_lipid_mean=apply(df.raw_lipid.log,1,mean)
+raw_lipid_std=apply(df.raw_lipid.log,1,sd)
+df.raw_lipid.scaled=(df.raw_lipid.scaled-raw_lipid_mean)/raw_lipid_std
+# df.raw_lipid.scaled=scale(df.raw_lipid.log, center = TRUE, scale = TRUE)
 
-# df.raw_metab.scaled=as.data.frame(nneg(as.matrix(df.raw_metab.scaled),method='min'))
+# df.raw_lipid.scaled=as.data.frame(nneg(as.matrix(df.raw_lipid.scaled),method='min'))
 
-dim(df.raw_metab.scaled)
+dim(df.raw_lipid.scaled)
+
 ```
 
 ```{r}
-df.raw_metab.scaled=scale(df.raw_metab.log, center = TRUE, scale = TRUE)
+df.raw_lipid.scaled=scale(df.raw_lipid.log, center = TRUE, scale = TRUE)
 # 
-# df.raw_metab.log=log2(df.raw_metab)
-# df.raw_metab.scaled=df.raw_metab.log
-# raw_metab_mean=apply(df.raw_metab.log,2,mean)
-# raw_metab_std=apply(df.raw_metab.log,2,sd)
-# df.raw_metab.scaled=(df.raw_metab.scaled-raw_metab_mean)/raw_metab_std
+# df.raw_lipid.log=log2(df.raw_lipid)
+# df.raw_lipid.scaled=df.raw_lipid.log
+# raw_lipid_mean=apply(df.raw_lipid.log,2,mean)
+# raw_lipid_std=apply(df.raw_lipid.log,2,sd)
+# df.raw_lipid.scaled=(df.raw_lipid.scaled-raw_lipid_mean)/raw_lipid_std
 
-mean(df.raw_metab.scaled[, 1])
-mean(as.numeric(df.raw_metab.scaled[1, ]))
-first_col_df <- data.frame(Metabolite = df.raw_metab.scaled[, 5])
-first_row_df <- data.frame(Metabolite = as.numeric(df.raw_metab.scaled[5, ]))
+mean(df.raw_lipid.scaled[, 1])
+mean(as.numeric(df.raw_lipid.scaled[1, ]))
+first_col_df <- data.frame(lipidolite = df.raw_lipid.scaled[, 5])
+first_row_df <- data.frame(lipidolite = as.numeric(df.raw_lipid.scaled[5, ]))
 
 # Plot the distribution of the first column
-ggplot(first_col_df, aes(x = Metabolite)) +
+ggplot(first_col_df, aes(x = lipidolite)) +
   geom_density(fill = "blue", alpha = 0.5) +  # Density plot
   labs(title = "Distribution of the First Column", x = "Values", y = "Density")
 
-ggplot(first_row_df, aes(x = Metabolite)) +
+ggplot(first_row_df, aes(x = lipidolite)) +
   geom_density(fill = "red", alpha = 0.5) +  # Density plot
   labs(title = "Distribution of the First Row", x = "Values", y = "Density")
 ```
@@ -107,7 +108,7 @@ ggplot(first_row_df, aes(x = Metabolite)) +
 ## Consensus Clustering
 
 ```{r}
-rcc = ConsensusClusterPlus(data.matrix(df.raw_metab.scaled), 
+rcc = ConsensusClusterPlus(data.matrix(df.raw_lipid.scaled), 
                            maxK = 8, 
                            reps = 1000, 
                            pItem = 0.8, 
@@ -121,21 +122,21 @@ rcc = ConsensusClusterPlus(data.matrix(df.raw_metab.scaled),
 ### PCA
 
 ```{r}
-colnames(df.raw_metab.scaled)[ncol(df.raw_metab.scaled)]
+colnames(df.raw_lipid.scaled)[ncol(df.raw_lipid.scaled)]
 ```
 
 ```{r}
-pca.lipid=prcomp(df.raw_metab.scaled,scale.=TRUE)
+pca.lipid=prcomp(df.raw_lipid.scaled,scale.=TRUE)
 summary(pca.lipid)
 
 ```
 
 ```{r}
 
-df.metab.pca=pca.lipid$x
+df.lipid.pca=pca.lipid$x
 using_num=49
-df.metab.pca=df.metab.pca[,1:using_num]
-df.metab.pca=as.data.frame(nneg(as.matrix(df.metab.pca),method='min'))
+df.lipid.pca=df.lipid.pca[,1:using_num]
+df.lipid.pca=as.data.frame(nneg(as.matrix(df.lipid.pca),method='min'))
 
 fviz_eig(pca.lipid, addlabels = TRUE,ncp=10)
 
@@ -150,18 +151,18 @@ fviz_eig(pca.lipid, addlabels = TRUE,ncp=10)
 ##### Draw ######
 class_label='kmeans_2_clusters'
 df.use_sample=df.sample
-df.use=merge(df.raw_metab.scaled,df.cluster_result[,class_label,drop=FALSE],by="row.names")
+df.use=merge(df.raw_lipid.scaled,df.cluster_result[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
-volcano.test.results=pvalue_by_wilcox(df.use,metab_num,class_label)
+volcano.test.results=pvalue_by_wilcox(df.use,lipid_num,class_label)
 
 type1='1'
 type2='2'
 mean(df.use[which(df.use[class_label] == type2)][,1])
 mean(df.use[which(df.use[class_label] == type1)][,1])
 df.use
-volcano.test.results$FC=apply(df.use[,1:metab_num], 2, 
+volcano.test.results$FC=apply(df.use[,1:lipid_num], 2, 
                               function(x) 
                                 mean(as.numeric(x[which(df.use[class_label] == type2)]))/
                                 mean(as.numeric(x[which(df.use[class_label] == type1)])))
@@ -205,13 +206,13 @@ lipo.bubble %>%
 
 ```{r}
 
-df.use=df.metab.pca
-# df.use=df.raw_metab.scaled
+df.use=df.lipid.pca
+# df.use=df.raw_lipid.scaled
 
 set.seed(120)
 nmf_k=3
 kmeans_k=3
-df.cluster_result=perform_clustering(df.use, metab_num=ncol(df.use),nmf_k, kmeans_k)
+df.cluster_result=perform_clustering(df.use, lipid_num=ncol(df.use),nmf_k, kmeans_k)
 df.cluster_result.correction=df.cluster_result
 
 dim(df.cluster_result)
@@ -227,13 +228,13 @@ df.cluster_result.correction
 
 ```{r fig.height=6, fig.width=10}
 
-df.use=df.metab.pca
+df.use=df.lipid.pca
 
 # 1203948 321
 set.seed(321)
 nmf_k=3
 kmeans_k=3
-df.cluster_result=perform_clustering(df.use, metab_num=ncol(df.use),nmf_k, kmeans_k)
+df.cluster_result=perform_clustering(df.use, lipid_num=ncol(df.use),nmf_k, kmeans_k)
 df.cluster_result.correction=df.cluster_result
 
 dim(df.cluster_result)
@@ -249,8 +250,8 @@ surv_object=Surv(df.use.os[[time_label_col]],df.use.os[[event_label_col]])
 # K-MEANS
 kmeans_fit=survfit(surv_object~kmeans_2_clusters,data=df.use.os)
 kmeans_plot=ggsurvplot(kmeans_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
-# pdf("~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/lipid_kmeans_survival.pdf")
-# ggsave(file="~/workstation/MetabSubtype/tasks/MultiOmics/notebooks/lipid_kmeans_survival.pdf",print(kmeans_plot)) # It's not working. Why?
+# pdf("~/workstation/lipidSubtype/tasks/MultiOmics/notebooks/lipid_kmeans_survival.pdf")
+# ggsave(file="~/workstation/lipidSubtype/tasks/MultiOmics/notebooks/lipid_kmeans_survival.pdf",print(kmeans_plot)) # It's not working. Why?
 print(kmeans_plot$plot,newpage = FALSE)
 # NMF
 nmf_fit=survfit(surv_object~nmf_2_clusters,data=df.use.os)
@@ -268,7 +269,7 @@ arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,p
 df.sample_cluster=merge(df.sample,df.cluster_result.correction,by="row.names")
 row.names(df.sample_cluster)=df.sample_cluster[[1]]
 df.sample_cluster=df.sample_cluster[,2:ncol(df.sample_cluster)]
-filepath.cluster='~/workstation/MetabSubtype/tasks/Subtype/data/lipid/cluster_result.csv'
+filepath.cluster='~/workstation/lipidSubtype/tasks/Subtype/data/lipid/cluster_result.csv'
 df.cluster_result.correction
 #
 # write.csv(df.sample_cluster,filepath.cluster)
@@ -281,25 +282,87 @@ df.cluster_result.correction
 
 ```{r fig.height=8, fig.width=8}
 
-df.use=merge(df.raw_metab.scaled,df.cluster_result.correction,by="row.names")
+df.use=merge(df.raw_lipid.scaled,df.cluster_result.correction,by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
 dim(df.use)
 p_cutoff=5e-2
 
-draw_single_heatmap(df.use,metab_num,'kmeans_3_clusters',p_cutoff,TRUE)
-draw_single_heatmap(df.use,metab_num,'nmf_3_clusters',p_cutoff,TRUE )
-draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',p_cutoff,TRUE )
-draw_single_heatmap(df.use,metab_num,'nmf_2_clusters',p_cutoff,TRUE )
+draw_single_heatmap(df.use,lipid_num,'kmeans_3_clusters',p_cutoff,TRUE)
+draw_single_heatmap(df.use,lipid_num,'nmf_3_clusters',p_cutoff,TRUE )
+draw_single_heatmap(df.use,lipid_num,'kmeans_2_clusters',p_cutoff,TRUE )
+draw_single_heatmap(df.use,lipid_num,'nmf_2_clusters',p_cutoff,TRUE )
+
+```
+
+```{r}
+
+class_label = 'lipid_cluster'
+
+df.use=merge(df.raw_lipid,df.sample[class_label,drop = FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+df.use[is.na(df.use)] = 0
+df.use = df.use[!is.na(df.use[class_label]),]
+
+lipids.all = colnames(df.use)[1:lipid_num]
+lipids.sig = filter_by_wilcox(df.use,lipids.all,class_label,0.05)
+
+
+p = draw_single_heatmap(df.use,lipids.all,class_label,TRUE)
+pdf("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/lipid/heatmap_sig.pdf")
+print(p)
+dev.off()
+
 ```
 
 ```{r}
 pdf("lipid_kmeans_2_sig_heatmap.pdf")
-draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',5e-2,TRUE )
+draw_single_heatmap(df.use,lipid_num,'kmeans_2_clusters',5e-2,TRUE )
 dev.off()
 pdf("lipid_kmeans_2_all_heatmap.pdf")
-draw_single_heatmap(df.use,metab_num,'kmeans_2_clusters',1,TRUE )
+draw_single_heatmap(df.use,lipid_num,'kmeans_2_clusters',1,TRUE )
+dev.off()
+```
+
+## Volcano
+
+```{r}
+
+
+
+class_label='lipid_cluster'
+df.use_sample=df.sample
+df.use=merge(df.raw_lipid,df.use_sample[,class_label,drop=FALSE],by="row.names")
+row.names(df.use)=df.use[[1]]
+df.use=df.use[,2:ncol(df.use)]
+
+volcano.test.results=pvalue_by_wilcox(df.use,lipid_num,class_label)
+
+type1='1'
+type2='2'
+volcano.test.results$FC=apply(df.use[,1:lipid_num], 2, 
+                          function(x) 
+                            mean(as.numeric(x[which(df.use[class_label] == type2)]))/
+                            mean(as.numeric(x[which(df.use[class_label] == type1)])))
+head(volcano.test.results)
+# Log2 (FC)
+volcano.test.results$log2FC <- log2(volcano.test.results[,'FC'])
+
+dim(volcano.test.results[volcano.test.results$pvalue<5e-2,])
+dim(volcano.test.results[(volcano.test.results$pvalue<5e-2)&(abs(volcano.test.results$log2FC)>log2(1.4)),])
+##标记上调下调
+pvalue_cutoff=5e-2
+fc_up_cutoff=1.5
+fc_down_cutoff=1/fc_up_cutoff
+
+
+volcano.test.results.sig=volcano.test.results[(volcano.test.results$pvalue<=5e-2)&((volcano.test.results$FC>=fc_up_cutoff)|(volcano.test.results$FC<=fc_down_cutoff)),]
+volcano.test.results.sig$Metabolites
+
+pdf("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/lipid/volcano.pdf")
+draw_volcano(volcano.test.results,pvalue_cutoff,fc_up_cutoff,use_std=FALSE)
 dev.off()
 ```
 
@@ -366,18 +429,19 @@ arrange_ggsurvplots(list(kmeans_plot,nmf_plot),ncol=2,nrow=1, data = df.use.os,p
 
 ```{r}
 
-class_label='kmeans_2_clusters'
-df.use_sample=df.cluster_result
-df.use=merge(df.raw_metab,df.cluster_result.correction[,class_label,drop=FALSE],by="row.names")
+class_label='lipid_cluster'
+df.use_sample=df.sample
+df.use=merge(df.raw_lipid,df.use_sample[,class_label,drop=FALSE],by="row.names")
 row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 
-volcano.test.results=pvalue_by_wilcox(df.use,metab_num,class_label)
+
+volcano.test.results=pvalue_by_wilcox(df.use,lipid_num,class_label)
 volcano.test.results$FDR=p.adjust(volcano.test.results$pvalue,method="BH")
 
 type1='1'
 type2='2'
-volcano.test.results$FC=apply(df.use[,1:metab_num], 2, 
+volcano.test.results$FC=apply(df.use[,1:lipid_num], 2, 
                               function(x) 
                                 mean(as.numeric(x[which(df.use[class_label] == type2)]))/
                                 mean(as.numeric(x[which(df.use[class_label] == type1)])))
@@ -399,16 +463,17 @@ volcano.test.results$lipid_class=sapply(volcano.test.results$Metabolites,functio
 
 table(volcano.test.results$lipid_class)
 sum(table(volcano.test.results$lipid_class))
-write.csv(volcano.test.results,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/lipid_stat.csv")
+write.csv(volcano.test.results,"~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/lipid/volcano_test_results.csv")
 # volcano.test.results$lipid_class
 
 # Test Stored Volcano
-volcano.test.results=read.csv("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240523_summary/lipid_stat.csv",row.names = 1)
+volcano.test.results=read.csv("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/lipid/volcano_test_results.csv",row.names = 1)
 ```
 
 ```{r}
 # pdf("lipid_bubble.pdf")
 lipo.bubble=volcano.test.results
+pdf("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/lipid/bubble.pdf")
 lipo.bubble %>%
   filter(lipid_class %in% c('Cer','Hex','LPC','LPE','SM','PC','PE','PG','PI','PS','TAG','DAG','TG')) %>%
   arrange(desc(`FDR`)) %>%
@@ -434,7 +499,7 @@ lipo.bubble %>%
   #       axis.text.x=element_blank(),
   #       axis.ticks.x=element_blank())+
   geom_hline(yintercept = c(-log2(1.2),log2(1.2)),lty=4,col="black",lwd=0.4)
-# dev.off()
+dev.off()
 ```
 
 ```{r}
@@ -448,7 +513,7 @@ lipo.bubble %>%
 
 ```{r}
 class_label='kmeans_2_clusters'
-df.grep_lipid=get_grep_df(df.raw_metab,metab_num)
+df.grep_lipid=get_grep_df(df.raw_lipid,lipid_num)
 use_num=ncol(df.grep_lipid)
 df.use=merge(df.grep_lipid,df.cluster_result.correction[,c(class_label),drop=FALSE],by="row.names")
 rownames(df.use)=df.use[[1]]
