@@ -512,7 +512,7 @@ lipo.bubble %>%
 ## Boxplot
 
 ```{r}
-class_label='kmeans_2_clusters'
+class_label='lipid_cluster'
 df.grep_lipid=get_grep_df(df.raw_lipid,lipid_num)
 use_num=ncol(df.grep_lipid)
 df.use=merge(df.grep_lipid,df.cluster_result.correction[,c(class_label),drop=FALSE],by="row.names")

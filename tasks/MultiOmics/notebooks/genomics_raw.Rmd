@@ -139,8 +139,15 @@ combat_edata3 = ComBat(dat=edata, batch=batch, mod=mod, par.prior=TRUE, ref.batc
 ### Preprocess
 
 ```{r}
+df.sample[df.sample$`Sample Name`=='7038',]
 
-class_label='metab_cluster'
+df.sample
+
+```
+
+```{r}
+
+class_label='lipid_cluster'
 df.using=merge(df.raw_counts,df.sample[,c("batch",'metab_cluster','lipid_cluster')],by="row.names")
 rownames(df.using)=df.using[,1]
 df.using=df.using[,2:ncol(df.using)]
@@ -160,7 +167,23 @@ length(group)
 ```
 
 ```{r}
-dge <- DGEList(counts=t(df.using[,1:(ncol(df.using)-3)]), group=group)
+
+time_label_col='os'
+event_label_col=paste0(time_label_col,'s')
+##### Survival #####
+df.use.os=df.sample[,c(class_label,time_label_col,event_label_col)]
+df.use.os=df.use.os[order(df.use.os[[time_label_col]]),,drop=FALSE]
+
+surv_object=Surv(df.use.os[[time_label_col]],df.use.os[[event_label_col]])
+
+# K-MEANS
+kmeans_fit=survfit(surv_object~metab_cluster,data=df.use.os)
+kmeans_plot=ggsurvplot(kmeans_fit, data = df.use.os,pval = TRUE,risk.table = TRUE)
+kmeans_plot
+```
+
+```{r}
+dge <- DGEList(counts=t(x.raw_counts), group=group)
 
 # 计算样本的归一化因子
 dge <- calcNormFactors(dge)
@@ -170,11 +193,12 @@ dim(df.using)
 length(group)
 length(design)
 ##### Method 1 #####
+# 
+# normalized_counts <- cpm(dge, normalized.lib.sizes = TRUE)
+# log_counts <- log2(normalized_counts + 1)
+# batch_corrected_log <- removeBatchEffect(log_counts, batch = batch, design = model.matrix(~group))
+# batch_corrected_counts <- 2^batch_corrected_log - 1
 
-normalized_counts <- cpm(dge, normalized.lib.sizes = TRUE)
-log_counts <- log2(normalized_counts + 1)
-batch_corrected_log <- removeBatchEffect(log_counts, batch = batch, design = model.matrix(~group))
-batch_corrected_counts <- 2^batch_corrected_log - 1
 ##### Method 2 #####
 # 使用voom对数据进行预处理
 v <- voom(dge, design)
@@ -185,16 +209,18 @@ v$E <- removeBatchEffect(v$E, batch=batch, design=design)
 dge <- estimateDisp(dge, design)
 # 后续可以使用limma进行差异表达分析
 fit <- glmFit(dge, design)
-edger.test.results=glmLRT(fit)$table
+lipid.test.results=glmLRT(fit)$table
 logFC <- glmLRT(fit)$table$logFC
 dim(v$E)
 v_corrected.edger=as.data.frame(t(v$E))
 rna_num=ncol(v_corrected.edger)
 
-mean_group1 <- mean(df.using[df.using[class_label]==1,'ENSG00000116748' ])
-mean_group2 <- mean(df.using[df.using[class_label]==2,'ENSG00000116748' ])
+mean_group1 <- mean(df.using[df.using[class_label]==1,'ENSG00000187288' ])
+mean_group2 <- mean(df.using[df.using[class_label]==2,'ENSG00000187288' ])
 mean_group1
 mean_group2
+
+df.test_results[df.test_results$SYMBOL == 'CIDEC','ENSEMBL']
 # write.csv(v_corrected.edger,'~/workstation/MetabSubtype/tasks/MultiOmics/data/rna/edger.csv')
 ```
 

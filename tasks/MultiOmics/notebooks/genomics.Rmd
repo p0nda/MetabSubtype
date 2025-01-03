@@ -4,7 +4,7 @@
 
 ```{r}
 dirpath = '~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/metab/rna_pathway_heatmap/'
-df.test_results=edger.test.results
+df.test_results=metab.test.results
 df.test_results$ENSEMBL = rownames(edger.test.results)
 colnames(df.test_results)[colnames(df.test_results) == "PValue"] ="pvalue"
 colnames(df.test_results)[colnames(df.test_results) == "logFC"] ="log2fc"
@@ -30,6 +30,60 @@ df.test_results[df.test_results$pvalue <= 5e-2,'is_sig'] = TRUE
 ```
 
 ```{r}
+# Update for Metab Test Results
+dirpath = '~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/metab/rna_pathway_heatmap/'
+
+# Metabolism test results
+metab.test.results$ENSEMBL = rownames(edger.test.results)
+colnames(metab.test.results)[colnames(metab.test.results) == "PValue"] ="pvalue"
+colnames(metab.test.results)[colnames(metab.test.results) == "logFC"] ="log2fc"
+
+# Map Different Names for Metabolism
+tmp_key = bitr(metab.test.results[['ENSEMBL']],
+  fromType="ENSEMBL", 
+  toType="SYMBOL", 
+  OrgDb="org.Hs.eg.db")
+
+matched_indices <- match(metab.test.results$ENSEMBL, tmp_key$ENSEMBL)
+metab.test.results$SYMBOL <- tmp_key$SYMBOL[matched_indices]
+
+tmp_key = bitr(metab.test.results[['ENSEMBL']], 
+  fromType="ENSEMBL", 
+  toType="ENTREZID", 
+  OrgDb="org.Hs.eg.db")
+matched_indices <- match(metab.test.results$ENSEMBL, tmp_key$ENSEMBL)
+metab.test.results$ENTREZID <- tmp_key$ENTREZID[matched_indices]
+
+metab.test.results$is_sig = FALSE
+metab.test.results[metab.test.results$pvalue <= 5e-2, 'is_sig'] = TRUE
+
+# Update for Lipid Test Results
+# Lipidomics test results
+lipid.test.results$ENSEMBL = rownames(edger.test.results)
+colnames(lipid.test.results)[colnames(lipid.test.results) == "PValue"] ="pvalue"
+colnames(lipid.test.results)[colnames(lipid.test.results) == "logFC"] ="log2fc"
+
+# Map Different Names for Lipidomics
+tmp_key = bitr(lipid.test.results[['ENSEMBL']], 
+  fromType="ENSEMBL", 
+  toType="SYMBOL", 
+  OrgDb="org.Hs.eg.db")
+
+matched_indices <- match(lipid.test.results$ENSEMBL, tmp_key$ENSEMBL)
+lipid.test.results$SYMBOL <- tmp_key$SYMBOL[matched_indices]
+
+tmp_key = bitr(lipid.test.results[['ENSEMBL']], 
+  fromType="ENSEMBL", 
+  toType="ENTREZID", 
+  OrgDb="org.Hs.eg.db")
+matched_indices <- match(lipid.test.results$ENSEMBL, tmp_key$ENSEMBL)
+lipid.test.results$ENTREZID <- tmp_key$ENTREZID[matched_indices]
+
+lipid.test.results$is_sig = FALSE
+lipid.test.results[lipid.test.results$pvalue <= 5e-2, 'is_sig'] = TRUE
+```
+
+```{r}
 ENSG00000132915
 v_corrected.edger[,'ENSG00000132915']
 
@@ -41,27 +95,27 @@ v_corrected.edger[,'ENSG00000132915']
 
 # Patterns to match
 patterns <- c('.+-P$', '.+-AS', '\\d{4,}', '^(MI|AC|LINC)', 'RNU-')
-
-# Check if column matches any patterns
-keep.symbols <- character()
-length(df.test_results[['SYMBOL']])
-symbols=df.test_results[!is.na(df.test_results['SYMBOL']),'SYMBOL']
-pb=progress_bar$new(total=length(symbols))
-for (symbol in symbols) {
-  pb$tick()
-  if (!any(sapply(patterns, function(p) str_detect(symbol, p)))) {
-    keep.symbols <- c(keep.symbols, df.test_results[df.test_results$SYMBOL==symbol,'ENSEMBL'])
-  }
-}
-length(keep.symbols[!is.na(keep.symbols)])
-df.cpm.coding=df.cpm[,keep.symbols]
-dim(df.cpm.coding)
-keep.symbols=keep.symbols[!is.na(keep.symbols)]
-df.test_results$CODING=0
-df.test_results[df.test_results$ENSEMBL %in% keep.symbols,'CODING']=1
-
-# write.csv(df.test_results,"~/workstation/MetabSubtype/tasks/MultiOmics/data/rna/rna_info.csv")
-rownames(df.test_results)=df.test_results$ENSEMBL
+# 
+# # Check if column matches any patterns
+# keep.symbols <- character()
+# length(df.test_results[['SYMBOL']])
+# symbols=df.test_results[!is.na(df.test_results['SYMBOL']),'SYMBOL']
+# pb=progress_bar$new(total=length(symbols))
+# for (symbol in symbols) {
+#   pb$tick()
+#   if (!any(sapply(patterns, function(p) str_detect(symbol, p)))) {
+#     keep.symbols <- c(keep.symbols, df.test_results[df.test_results$SYMBOL==symbol,'ENSEMBL'])
+#   }
+# }
+# length(keep.symbols[!is.na(keep.symbols)])
+# df.cpm.coding=df.cpm[,keep.symbols]
+# dim(df.cpm.coding)
+# keep.symbols=keep.symbols[!is.na(keep.symbols)]
+# df.test_results$CODING=0
+# df.test_results[df.test_results$ENSEMBL %in% keep.symbols,'CODING']=1
+# 
+# # write.csv(df.test_results,"~/workstation/MetabSubtype/tasks/MultiOmics/data/rna/rna_info.csv")
+# rownames(df.test_results)=df.test_results$ENSEMBL
 # df.test_results=merge(df.test_results,df.pathway_fc,by.x="ENSEMBL",by.y="row.names")
 ```
 
@@ -77,6 +131,12 @@ length(keep.symbols)
 
 df.test_results$CODING = 0
 df.test_results[keep.symbols,'CODING'] = 1
+
+metab.test.results$CODING = 0
+metab.test.results[keep.symbols,'CODING'] = 1
+
+lipid.test.results$CODING = 0
+lipid.test.results[keep.symbols,'CODING'] = 1
 ```
 
 ```{r}
@@ -120,7 +180,6 @@ length(entrezid.sig)
 
 entrezid.lipid = df.test_results[df.test_results$is_lipid,'ENTREZID']
 entrezid.lipid.sig=df.test_results[(df.test_results$is_use)&(df.test_results$is_lipid),'ENTREZID']
-entrezi.sig = df.test_results[(df.test_results$is_use),'ENTREZID']
 
 entrezid.universe=df.test_results[['ENTREZID']]
 entrezid.universe=entrezid.universe[!is.na(entrezid.universe)]
@@ -239,7 +298,7 @@ p=ggplot(kegg_table_draw, aes(comporison, Description)) +
   theme(legend.text = element_text(size = 10, face = "plain", colour = "black"), 
         legend.title = element_text(size = 10, face = "plain", colour = "black"), 
         legend.key.height = unit(0.3, "cm"), legend.key.width = unit(0.3, "cm"))
-pdf("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/rna_lipid_I_II_upregulated.pdf",10,8)
+# pdf("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/rna_lipid_I_II_upregulated.pdf",10,8)
 print(p)
 dev.off()
 ```
@@ -689,11 +748,12 @@ gene_names <- genes[seq(2, length(genes), 2)]
 
 df.test_results[df.test_results$ENTREZID %in% gene_ids,]
 # Filter
-rnas <- df.test_results[abs(df.test_results$log2fc)>log2(1)&(df.test_results$pvalue<5e-2)&(df.test_results$ENTREZID %in% gene_ids),'ENTREZID']
+rnas <- df.test_results[abs(df.test_results$log2fc)>log2(1)&(df.test_results$pvalue<5)&(df.test_results$ENTREZID %in% gene_ids),'ENTREZID']
 
-rnas=c(rnas,na.omit(df.test_results[df.test_results$SYMBOL == "GNMT",][['ENTREZID']]))
 queries=df.test_results[match(rnas,df.test_results$ENTREZID),'SYMBOL']  
 row_ha=rowAnnotation(sig=df.test_results[df.test_results$SYMBOL %in% queries,'is_sig'],col=list(sig=c('TRUE'='yellow','FALSE'='white')))
+df.test_results = df.test_results[order(df.test_results$SYMBOL),]
+
 mat=as.matrix(df.test_results[df.test_results$SYMBOL %in% queries,'log2fc',drop=FALSE])
 rownames(mat)=df.test_results[match(rownames(mat),df.test_results$ENSEMBL),'SYMBOL']
 # mat=mat[order(mat),,drop=FALSE]
@@ -722,10 +782,11 @@ filepath=str_replace_all(filepath,'  ',' ')
 if (pathway_name=='Purine metabolism'){
   pdf(filepath,5,10)
 }else{
-  pdf(filepath,5, 5)
+  pdf(filepath,5, 10)
 }
 draw(p)
 dev.off()
+df.test_results = df.test_results[order(df.test_results$SYMBOL),]
 df.test_results[df.test_results$ENTREZID %in% rnas,c('log2fc','SYMBOL','ENTREZID')]
 
 ```
@@ -746,7 +807,12 @@ gene_ids <- genes[seq(1, length(genes), 2)]
 gene_names <- genes[seq(2, length(genes), 2)]
 
 # Filter
-rnas <- df.test_results[abs(df.test_results$log2fc)>log2(1.2)&(df.test_results$pvalue<5e-2)&(df.test_results$ENTREZID %in% gene_ids),'ENTREZID']
+rnas <- df.test_results[abs(df.test_results$log2fc)>log2(1)&(df.test_results$pvalue<5)&(df.test_results$ENTREZID %in% gene_ids),'ENTREZID']
+
+# No Filter
+
+rnas = df.test_results[df.test_results$ENTREZID %in% gene_ids,'ENTREZID']
+
 
 queries=df.test_results[match(rnas,df.test_results$ENTREZID),'SYMBOL']  
 row_ha=rowAnnotation(sig=df.test_results[df.test_results$SYMBOL %in% queries,'is_sig'],col=list(sig=c('TRUE'='yellow','FALSE'='white')))
@@ -777,7 +843,7 @@ pathway_name=str_replace_all(pathway_name,'\\)','_')
 filepath=paste(dirpath,pathway_name,'.pdf',sep='')
 filepath=str_replace_all(filepath,'  ',' ')
 if (pathway_name=='Purine metabolism'){
-  pdf(filepath,5,10)
+  pdf(filepath,5,25)
 }else{
   pdf(filepath,5, 5)
 }
@@ -821,6 +887,40 @@ wilcox.test(loaddata[['']] ~ loaddata[,class_label], data = df.test, exact = FAL
 
 ```{r}
 
+dim(df.test_results[abs(df.test_results$log2fc)>1 & (df.test_results$pvalue<5e-2) ,])
+queries=df.test_results[abs(df.test_results$log2fc)>1 & (df.test_results$pvalue<5e-2),'SYMBOL'] 
+length(queries)
+
+# Metab
+volcano.test_results=metab.test.results
+volcano.test_results$fc = 2^(volcano.test_results$log2fc)
+colnames(volcano.test_results)[colnames(volcano.test_results) == "fc"] ="FC"
+colnames(volcano.test_results)[colnames(volcano.test_results) == "log2fc"] ="log2FC"
+colnames(volcano.test_results)[colnames(volcano.test_results) == "SYMBOL"] ="Metabolites"
+
+volcano.test_results=volcano.test_results[volcano.test_results$Metabolites %in% queries,]
+rownames(volcano.test_results)=volcano.test_results$SYMBOL
+pdf("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/Immune/metab_volcano.pdf")
+draw_volcano(volcano.test_results,0.05,2,'Metabolites')
+dev.off()
+
+# Lipid
+volcano.test_results=lipid.test.results
+volcano.test_results$fc = 2^(volcano.test_results$log2fc)
+colnames(volcano.test_results)[colnames(volcano.test_results) == "fc"] ="FC"
+colnames(volcano.test_results)[colnames(volcano.test_results) == "log2fc"] ="log2FC"
+colnames(volcano.test_results)[colnames(volcano.test_results) == "SYMBOL"] ="Metabolites"
+
+volcano.test_results=volcano.test_results[volcano.test_results$Metabolites %in% queries,]
+rownames(volcano.test_results)=volcano.test_results$SYMBOL
+
+pdf("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/Immune/lipid_volcano.pdf")
+draw_volcano(volcano.test_results,0.05,2,'Lipids')
+dev.off()
+```
+
+```{r}
+
 pathway_name='Regulation of lipolysis in adipocytes'
 # 指定目标KEGG通路，例如hsa04110（自噬通路）
 pathway_id <- "hsa04923"
@@ -850,4 +950,292 @@ draw_volcano(volcano.test_results,0.05,2)
 ```{r}
 volcano.test_results <- volcano.test_results[order(-abs(volcano.test_results$log2FC),volcano.test_results$pvalue), ]
 volcano.test_results[1:20,c('ENTREZID','Metabolites')]
+```
+
+# Cell Type
+
+```{r}
+
+# https://www.sciencedirect.com/science/article/pii/S0092867423013351?via%3Dihub
+# Marker genes for each cell type
+Tcell <- c("CD40LG", "TBX21", "SH2D1A", "PHYPIN", "ZNF831", "CD6", "THEMIS", "UBASH3A", "TRA1", "EOMES", 
+           "GRAP2", "ZAP70", "SIRPG", "ICOS", "FASLG", "CD8A", "CD8B", "ITK", "GZMA", "KLRK1", "GZMH", 
+           "GZMK", "CD3D", "CD3E", "CD3G", "SIGLEC7", "MS4A4A", "SIGLEC1", "CD300E")
+
+Myeloid <- c("CLEC10A", "CD14", "CD16", "VSIG4", "CD33", "MS4A7", "LY6", "CLEC5A", "FCER1A", "LILRB2", 
+             "CSF1R", "LILRA1", "ADORA3", "MPEG1", "FCN1", "RNASE6", "FPR3", "CYBB", "MS4A4E", "OLR1", 
+             "CD163", "WDFY4", "LAG3", "CRIM1", "NAAA", "GRIK4", "PSMB9", "SERP2", "HOXB4", "CASP7", 
+             "TMCC2", "ARPC5L", "MCTP2", "LYST")
+
+Stroma <- c("CDH11", "DCN", "PDGFRA", "COL1A2", "ISLR", "COL1A1", "COL14A1", "BGN", "COL5A2", "POSTN", 
+            "PODH18", "ADAMTS12", "MXRA5", "SULF1", "EDNRA", "PRRX1", "COL3A1", "THY1", "LUM", "COL12A1", 
+            "COL14A2")
+
+Treg <- c("FOXP3", "IL2RA", "CD80", "CD17", "LAIR2", "CCR8", "CCL22", "TNFRSF18", "TNFRSF4", "DSC1", "SESN1")
+
+CD4 <- c("BACH2", "TRABD2A", "IL7R", "HDAC4", "NR3C2", "APOBEC3", "PABPC1", "HLA-DPB1", "MFHAS1", "SELL")
+
+CD8 <- c("FASLG", "CD8A", "SETBP1", "CTSW", "APOBEC3C", "BTNL8", "ULBP3", "RAD51", "WNT9A", "CER55", 
+         "NK67", "FAM156A", "ZNF696", "MCF5", "DPF3", "TTC24", "YARS", "EBP", "TRPS1", "GZMH", "VCAM1")
+
+cDC2 <- c("FCER1A", "CD1C", "XCR1", "CLEC10A", "BATF3")
+
+cDC1 <- c("IDO1", "C1orf54", "TREM2")
+
+Macrophage <- c("APOE", "TREM2", "CIQB", "CLEC9A", "VSIG4")
+
+ClassicalMonocytes <- c("S100A8", "S100A9", "VCAN", "FCN1", "LYZ")
+```
+
+```{r}
+# Function to convert gene SYMBOLs to ENSEMBL IDs
+convert_to_ensembl <- function(cell_markers, conversion_df) {
+  # cell_markers: A named list of cell type gene vectors
+  # conversion_df: A dataframe with SYMBOL and ENSEMBL columns
+  
+  # Initialize an empty list for converted ENSEMBL IDs
+  cell_markers_ensembl <- list()
+  
+  # Loop through each cell type
+  for (cell_type in names(cell_markers)) {
+    # Get current SYMBOL gene list
+    gene_symbols <- cell_markers[[cell_type]]
+    
+    # Filter conversion dataframe to match SYMBOLs
+    matched_genes <- conversion_df[conversion_df$SYMBOL %in% gene_symbols, ]
+    
+    # Extract ENSEMBL IDs
+    ensembl_ids <- matched_genes$ENSEMBL
+    
+    # Store the ENSEMBL IDs in the output list
+    cell_markers_ensembl[[cell_type]] <- unique(ensembl_ids)
+  }
+  
+  return(cell_markers_ensembl)
+}
+
+# Example usage:
+# Assuming df.test_results is your dataframe with SYMBOL and ENSEMBL columns
+# And cell_markers is the list of cell type gene SYMBOLs
+
+# Convert SYMBOL cell markers to ENSEMBL IDs
+
+# Print the resulting list of ENSEMBL IDs
+cell_markers <- list(
+  Tcell = Tcell,
+  Myeloid = Myeloid,
+  Stroma = Stroma,
+  Treg = Treg,
+  CD4 = CD4,
+  CD8 = CD8,
+  cDC2 = cDC2,
+  cDC1 = cDC1,
+  Macrophage = Macrophage,
+  ClassicalMonocytes = ClassicalMonocytes
+)
+cell_markers_ensembl <- convert_to_ensembl(cell_markers, df.test_results)
+
+for (cell_type in names(cell_markers)) {
+    # Get current SYMBOL gene list
+    gene_symbols <- cell_markers[[cell_type]]
+    print(paste(cell_type,length(gene_symbols)))
+}
+for (cell_type in names(cell_markers_ensembl)) {
+    # Get current SYMBOL gene list
+    gene_symbols <- cell_markers[[cell_type]]
+    print(paste(cell_type,length(gene_symbols)))
+}
+```
+
+```{r}
+# Function to calculate average marker expression per cell type
+calculate_cell_type_average <- function(rna_data, cell_markers) {
+  # rna_data: A dataframe with samples as rows and genes as columns
+  # cell_markers: A named list of cell type markers
+  
+  averages <- data.frame(row.names = rownames(rna_data))
+  
+  for (cell_type in names(cell_markers)) {
+    # Extract marker genes that exist in the RNA dataframe
+    valid_markers <- cell_markers[[cell_type]][cell_markers[[cell_type]] %in% colnames(rna_data)]
+    
+    if (length(valid_markers) > 0) {
+      # Calculate the average expression for the valid marker genes
+      averages[[cell_type]] <- rowMeans(rna_data[, valid_markers, drop = FALSE])
+    } else {
+      # If no valid markers, fill with NA
+      averages[[cell_type]] <- NA
+    }
+  }
+  
+  return(averages)
+}
+
+df.cell_type = calculate_cell_type_average(v_corrected.edger,cell_markers_ensembl)
+# Example usage:
+# Define a list of cell markers
+
+
+# Assuming 'rna_data' is your RNA dataframe
+# result <- calculate_cell_type_average(rna_data, cell_markers)
+```
+
+## Heatmap
+
+```{r}
+dirpath = '~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/Immune/'
+class_label = 'lipid_cluster'
+ha_col = class_label
+loaddata = merge(df.cell_type,df.sample[,c(class_label),drop = FALSE],by="row.names")
+rownames(loaddata) = loaddata[[1]]
+loaddata = loaddata[,2:ncol(loaddata)]
+
+candidate_colors <- c("#8ea3c2",  "#8ccdbf", "#edb17f",  "#f1df82","#FEA3A2","#8E8BFE")
+
+df.ha = loaddata[,c(class_label),drop = FALSE]
+ha_color_mapping=c()
+ha_color_mapping=candidate_colors[1:length(unique(df.ha[[ha_col]]))]
+ha_color_mapping= setNames(ha_color_mapping,unique(df.ha[[ha_col]]))
+color_list=NULL
+color_list[[ha_col]]=ha_color_mapping
+
+top_ha = HeatmapAnnotation(df=df.ha,col = color_list,
+        simple_anno_size=unit(4, "mm"),
+        #border = T,
+        gap = unit(1, "points"),
+        show_annotation_name = TRUE)
+    col_ha=df.label_col
+bk=c(-1.5,0,1.5)
+col_fun<-colorRamp2(
+    bk,
+    c("#1D91C0", "white", "#E31A1C"))
+mat = t(data.matrix(loaddata[,1:ncol(df.cell_type)]))
+col_ha = loaddata[class_label]
+p = ComplexHeatmap::pheatmap(mat,
+                        col = col_fun,
+                        name = "Relative level",
+                        top_annotation = top_ha,
+                        column_split = col_ha,
+                        cluster_row_slices=F,
+                        fontsize_row = 7, 
+                        cluster_cols = T,
+                        row_title_rot = 0,
+                        fontsize_col = 5,
+                        treeheight_row = 20,
+                        treeheight_col = 20,
+                        row_title_gp = gpar(fontsize = 7),
+                        legend_breaks=seq(break_low_boundary,break_high_boundary,(break_high_boundary-break_low_boundary)/4),
+                        scale="row"
+                    )
+
+filepath = paste0(dirpath,class_label,'_cellType.pdf')
+pdf(filepath,8,3)
+print(p)
+dev.off()
+```
+
+# Stacked Bar
+
+```{r}
+
+# Function for stacked bar chart with percentage distribution (handling NAs)
+plot_stacked_bar_percentage <- function(df, cluster_col, attribute_col) {
+    df= df [,2:ncol(df)]
+
+  # Replace NA values with a label (e.g., "Unknown") in the attribute column
+  # df[[attribute_col]] <- ifelse(is.na(df[[attribute_col]]), "Unknown", df[[attribute_col]])
+    df = df[!is.na(df[[attribute_col]]),]
+
+  # Ensure the attribute column is a factor
+  df[[attribute_col]] <- factor(df[[attribute_col]], levels = unique(df[[attribute_col]]))
+  
+  # Convert cluster column to factor for discrete x-axis
+  df[[cluster_col]] <- factor(df[[cluster_col]], levels = unique(df[[cluster_col]]))
+  
+  # Calculate the percentage distribution within each cluster
+  df_summary <- df %>%
+    group_by(.data[[cluster_col]], .data[[attribute_col]]) %>%
+    tally() %>%
+    group_by(.data[[cluster_col]]) %>%
+    mutate(percentage = n / sum(n) * 100)
+  
+  # Create a dynamic color palette based on unique attribute values
+  color_palette <- scales::hue_pal()(length(unique(df[[attribute_col]])))
+  
+  # Plot the stacked bar with percentage distribution
+  p=ggplot(df_summary, aes_string(x = cluster_col, y = "percentage", fill = attribute_col)) +
+    geom_bar(stat = "identity",width=0.4) +
+    scale_fill_manual(values = color_palette) +  # Use dynamic color palette
+    scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+    labs(x = "Clusters", y = "Percentage", title = "Stacked Bar - Percentage Distribution") +
+    ggtitle(cluster_col)+
+    theme_minimal()+
+    theme(
+    # axis.text.x = element_text(angle = 0, hjust = 1),  # Rotate x-axis labels if needed
+    aspect.ratio = 0.6  # Adjust the aspect ratio to make the plot thinner
+    )
+  return(p)
+}
+
+# Function for stacked bar chart with absolute numbers (handling NAs)
+plot_stacked_bar_absolute <- function(df, cluster_col, attribute_col) {
+    df= df [,2:ncol(df)]
+
+  # Replace NA values with a label (e.g., "Unknown") in the attribute column
+  # df[[attribute_col]] <- ifelse(is.na(df[[attribute_col]]), "Unknown", df[[attribute_col]])
+  df = df[!is.na(df[[attribute_col]]),]
+  # Ensure the attribute column is a factor
+  df[[attribute_col]] <- factor(df[[attribute_col]], levels = unique(df[[attribute_col]]))
+  
+  # Convert cluster column to factor for discrete x-axis
+  df[[cluster_col]] <- factor(df[[cluster_col]], levels = unique(df[[cluster_col]]))
+  
+  # Calculate the absolute numbers within each cluster
+  df_summary <- df %>%
+    group_by(.data[[cluster_col]], .data[[attribute_col]]) %>%
+    tally()
+  
+  # Create a dynamic color palette based on unique attribute values
+  color_palette <- scales::hue_pal()(length(unique(df[[attribute_col]])))
+  
+  # Plot the stacked bar with absolute numbers
+  p=ggplot(df_summary, aes_string(x = cluster_col, y = "n", fill = attribute_col)) +
+    geom_bar(stat = "identity",width=0.4) +
+    scale_fill_manual(values = color_palette) +  # Use dynamic color palette
+    labs(x = "Clusters", y = "Count", title = "Stacked Bar - Absolute Numbers") +
+    theme_minimal()+
+    ggtitle(cluster_col)+
+    theme(
+    # axis.text.x = element_text(angle = 0, hjust = 1),  # Rotate x-axis labels if needed
+    aspect.ratio = 0.6  # Adjust the aspect ratio to make the plot thinner
+    )
+  return(p)
+}
+```
+
+```{r}
+plot_stacked_bar_percentage(df.sample,'lipid_cluster','batch')
+plot_stacked_bar_percentage(df.sample,'lipid_cluster','CODEX主要亚型')
+plot_stacked_bar_percentage(df.sample,'lipid_cluster','smoke')
+
+```
+
+```{r}
+df= df.sample
+cluster_col = 'lipid_cluster'
+attribute_col = 'smoke'
+ df_summary <- df %>%
+    group_by(!!sym(cluster_col), !!sym(attribute_col)) %>%
+    tally() %>%
+    group_by(!!sym(cluster_col)) %>%
+    mutate(percentage = n / sum(n) * 100)
+```
+
+```{r}
+df = df [,2:ncol(df)]
+ df_summary <- df %>%
+    group_by(lipid_cluster, smoke) %>%
+    tally() %>%
+    group_by(!!sym(cluster_col)) %>%
+    mutate(percentage = n / sum(n) * 100)
 ```

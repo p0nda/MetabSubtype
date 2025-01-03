@@ -704,7 +704,7 @@ meta_result_process<-function(raw_result_df){
 
 ##### Volcano #####
 
-draw_volcano<-function(volcano.test.results,pvalue_cutoff,fc_up_cutoff,use_std=FALSE){
+draw_volcano<-function(volcano.test.results,pvalue_cutoff,fc_up_cutoff,title='',use_std=FALSE){
     fc_down_cutoff=1/fc_up_cutoff
         
     volcano.test.results <- volcano.test.results %>% 
@@ -734,6 +734,7 @@ draw_volcano<-function(volcano.test.results,pvalue_cutoff,fc_up_cutoff,use_std=F
                                    "Not significant" = alpha("grey", 0.4))) +  # Semi-transparent for "Not significant"  xlab(expression("log"[2]*"FC")) + 
       xlab(expression("log"[2]*"FC")) +
       ylab(expression("-log"[10]*"P value")) +
+      ggtitle(title)+
       theme_bw() +
       ##固定长宽比例不随着改变而改变
       theme(plot.margin = margin(1, 1, 1, 1, "cm"), aspect.ratio = 1, panel.grid = element_blank())      +
