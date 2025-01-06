@@ -920,7 +920,7 @@ dev.off()
 ```
 
 ```{r}
-
+df.test_results = lipid.test.results
 pathway_name='Regulation of lipolysis in adipocytes'
 # 指定目标KEGG通路，例如hsa04110（自噬通路）
 pathway_id <- "hsa04923"
@@ -944,7 +944,7 @@ colnames(volcano.test_results)[colnames(volcano.test_results) == "SYMBOL"] ="Met
 volcano.test_results=volcano.test_results[volcano.test_results$Metabolites %in% queries,]
 rownames(volcano.test_results)=volcano.test_results$SYMBOL
 
-draw_volcano(volcano.test_results,0.05,2)
+draw_volcano(volcano.test_results,0.05,2,'Lipid Regulation of lipolysis in adipocytes')
 ```
 
 ```{r}
@@ -1139,18 +1139,25 @@ dev.off()
 ```{r}
 
 # Function for stacked bar chart with percentage distribution (handling NAs)
-plot_stacked_bar_percentage <- function(df, cluster_col, attribute_col) {
+plot_stacked_bar_percentage <- function(df, cluster_col, attribute_col,order_attribute = NULL) {
     df= df [,2:ncol(df)]
 
   # Replace NA values with a label (e.g., "Unknown") in the attribute column
   # df[[attribute_col]] <- ifelse(is.na(df[[attribute_col]]), "Unknown", df[[attribute_col]])
     df = df[!is.na(df[[attribute_col]]),]
+    df = df[!is.na(df[[cluster_col]]),]
 
-  # Ensure the attribute column is a factor
-  df[[attribute_col]] <- factor(df[[attribute_col]], levels = unique(df[[attribute_col]]))
+    df = df[order(df[[attribute_col]]),]
+    df[[cluster_col]] <- factor(df[[cluster_col]], levels = c(1,2))
+
+    if (!is.null(order_attribute)) {
+    df[[attribute_col]] <- factor(df[[attribute_col]], levels = order_attribute,ordered= TRUE)
+  } else {
+    df[[attribute_col]] <- factor(df[[attribute_col]], levels = unique(df[[attribute_col]]),ordered= TRUE)
+  }
   
-  # Convert cluster column to factor for discrete x-axis
-  df[[cluster_col]] <- factor(df[[cluster_col]], levels = unique(df[[cluster_col]]))
+  # Convert cluster column to factor for discrete x-axis with desired order
+  
   
   # Calculate the percentage distribution within each cluster
   df_summary <- df %>%
@@ -1214,9 +1221,31 @@ plot_stacked_bar_absolute <- function(df, cluster_col, attribute_col) {
 ```
 
 ```{r}
-plot_stacked_bar_percentage(df.sample,'lipid_cluster','batch')
-plot_stacked_bar_percentage(df.sample,'lipid_cluster','CODEX主要亚型')
-plot_stacked_bar_percentage(df.sample,'lipid_cluster','smoke')
+
+df.sample
+stacked.sample = df.sample
+stacked.sample$smoke = ifelse(is.na(df.sample$smoke),'NA',ifelse(df.sample$smoke=='是','Yes','No'))
+stacked.sample$survival_level = ifelse(df.sample$os>24,'>24 months','0-24 months')
+stacked.sample$subtype = ifelse(is.na(df.sample['病理类型']),'NA',ifelse(df.sample['病理类型']=='单纯型','Pure','Complex'))
+attribute_names = c('TNM','pTNMs','subtype','smoke','survival_level')
+
+filename = paste0("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/Immune/",'lipid_attributes','.pdf')
+pdf(filename,5,5)
+for (attribute_name in attribute_names){
+  p = plot_stacked_bar_percentage(stacked.sample,'lipid_cluster',attribute_name)
+  print(p)
+}
+dev.off()
+
+filename = paste0("~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/Immune/",'metab_attributes','.pdf')
+  pdf(filename)
+for (attribute_name in attribute_names){
+  p = plot_stacked_bar_percentage(stacked.sample,'metab_cluster',attribute_name)
+  print(p)
+}
+dev.off()
+
+
 
 ```
 
