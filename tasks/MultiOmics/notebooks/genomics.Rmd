@@ -446,7 +446,7 @@ dev.off()
 ```{r}
 
 
-using.test_results=df.test_results
+using.test_results=metab.test.results
 using.test_results$fc=2^(using.test_results$log2fc)
 foldchanges=using.test_results[,"fc"]
 names(foldchanges)=using.test_results[,'ENTREZID']
@@ -460,17 +460,52 @@ gene_list[duplicated(gene_list)]
 kk2=gseKEGG(gene_list,organism = 'hsa',nPerm=1000,pvalueCutoff = 1)
 length(gene_list)
 
-df.kk2=as.data.frame(kk2)
-df.kk2=df.kk2[order(-abs(df.kk2$enrichmentScore)),]
+metab.kk2=as.data.frame(kk2)
+metab.kk2=metab.kk2[order(-abs(metab.kk2$enrichmentScore)),]
 gseaplot(kk2, by = "runningScore", title = kk2$Description[1], geneSetID = 1)
 head(kk2)
 
 description_name="Regulation of lipolysis in adipocytes"
-wanted_pathways=c('Regulation of lipolysis in adipocytes','Longevity regulating pathway','Type II diabetes mellitus')
+wanted_pathways=metab.kk2[abs(metab.kk2$NES)>2.5,'Description']
 for (description_name in wanted_pathways){
-  p=gseaplot2(kk2,  title = description_name, geneSetID = which(kk2$Description==description_name))
+  p=gseaplot2(kk2,title = description_name, geneSetID = which(kk2$Description==description_name))
   
   filepath_name=paste0('~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/gsea/metab/',description_name,'.pdf')
+  pdf(filepath_name)
+  print(p)
+  dev.off()
+
+}
+
+```
+
+```{r}
+
+using.test_results=lipid.test.results
+using.test_results$fc=2^(using.test_results$log2fc)
+foldchanges=using.test_results[,"fc"]
+names(foldchanges)=using.test_results[,'ENTREZID']
+# gene_list<-na.omit(gene_list)
+gene_list=foldchanges
+gene_list = sort(gene_list, decreasing = TRUE)
+
+length(gene_list)
+length(unique(gene_list))
+gene_list[duplicated(gene_list)]
+kk2=gseKEGG(gene_list,organism = 'hsa',nPerm=1000,pvalueCutoff = 1)
+length(gene_list)
+
+lipid.kk2=as.data.frame(kk2)
+lipid.kk2=lipid.kk2[order(-abs(lipid.kk2$enrichmentScore)),]
+gseaplot(kk2, by = "runningScore", title = kk2$Description[1], geneSetID = 1)
+head(kk2)
+
+wanted_pathways=lipid.kk2[abs(lipid.kk2$NES)>2.5,'Description']
+
+for (description_name in wanted_pathways){
+  p=gseaplot2(kk2,title = description_name, geneSetID = which(kk2$Description==description_name))
+  
+  filepath_name=paste0('~/workstation/MetabSubtype/tasks/MultiOmics/results/20240930_essay_figures/gsea/lipid/',description_name,'.pdf')
   pdf(filepath_name)
   print(p)
   dev.off()
@@ -795,6 +830,7 @@ df.test_results[df.test_results$ENTREZID %in% rnas,c('log2fc','SYMBOL','ENTREZID
 
 ```{r}
 
+df.test_results = metab.test.results
 
 pathway_name='purine'
 pathway_id <- "hsa00230"
@@ -843,9 +879,9 @@ pathway_name=str_replace_all(pathway_name,'\\)','_')
 filepath=paste(dirpath,pathway_name,'.pdf',sep='')
 filepath=str_replace_all(filepath,'  ',' ')
 if (pathway_name=='Purine metabolism'){
-  pdf(filepath,5,25)
+  pdf(filepath,5,35)
 }else{
-  pdf(filepath,5, 5)
+  pdf(filepath,5, 35)
 }
 draw(p)
 dev.off()
@@ -1132,6 +1168,27 @@ filepath = paste0(dirpath,class_label,'_cellType.pdf')
 pdf(filepath,8,3)
 print(p)
 dev.off()
+```
+
+## Markers
+
+```{r}
+BiocManager::install("SingleR")
+BiocManager::install("celldex")
+
+library(SingleR)
+
+# View available references
+SingleR::listDatasets()
+
+# For example, load the Human Primary Cell Atlas
+hpca.se <- SingleR::HumanPrimaryCellAtlasData()
+
+# Explore the dataset
+print(hpca.se)
+
+# Get marker genes for T cells
+tcell_markers <- hpca.se$labels[hpca.se$labels == "T cells"]
 ```
 
 # Stacked Bar
