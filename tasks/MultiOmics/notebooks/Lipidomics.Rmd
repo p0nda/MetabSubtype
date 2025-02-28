@@ -49,7 +49,6 @@ df.sample<-read.csv(filepath.sample, header= TRUE, check.names=F)
 length(unique((df.lipid[,1])))
 df.lipid[df.lipid=='']=NA
 dim(df.lipid)
-
 df.sample[df.sample=='']=NA
 df.sample[df.sample=='Neg']=NA
 # df.sample=df.sample[!is.na(df.sample['Sample Name']),c('Sample Name','主要分型','生存时间分组','MT2结构')]
