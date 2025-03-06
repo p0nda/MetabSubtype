@@ -726,7 +726,7 @@ draw_volcano<-function(volcano.test.results,pvalue_cutoff,fc_up_cutoff,title='',
     xlim_cutoff=max(abs(log2(min(volcano.test.results$FC))),abs(log2(max(volcano.test.results$FC))))
     p1=ggplot(volcano.test.results, aes(log2FC, -log(pvalue,10), fill = Expression, label=relabel)) +  
       # ggplot(volcano.test.results, aes(logFC, -log(pvalue,10), fill = Expression)) +  
-      geom_point(colour = "gray" ,alpha=0.8, size = 2, shape = 21)   +
+      geom_point(colour = "gray" ,alpha=0.8, size = 2, shape = 21, stroke = 0)   +
       xlim((-xlim_cutoff-0.5),(xlim_cutoff+0.5))+
       geom_text_repel (size = 2.5)   +
       scale_fill_manual(values = c("Up" = alpha("#F8766D", 1),  # Full opacity for "Up"

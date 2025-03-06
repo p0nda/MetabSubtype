@@ -20,11 +20,15 @@ library(colorRamp2)
 
 source("/home/suh/workstation/MetabSubtype/tasks/Figure/app/utils.R")
 
-preprocess_data <- function(data_matrix) {
+wash_data <- function(data_matrix){
     # Wash
     data_matrix=data_matrix[,colnames(data_matrix)!="s-adenosyl-l-homocysteine_pos"]
     data_matrix[data_matrix=='']=NA
-
+    return(data_matrix)
+}
+preprocess_data <- function(data_matrix) {
+    
+    data_matrix = wash_data(data_matrix)
     # log
     data_matrix = log2(data_matrix)
     # Scaling
@@ -47,17 +51,19 @@ filepath.metab <- "/home/suh/workstation/MetabSubtype/tasks/Figure/data/Using/me
 filepath.lipid <- "/home/suh/workstation/MetabSubtype/tasks/Figure/data/Using/lipid.csv"
 filepath.sample <- "/home/suh/workstation/MetabSubtype/tasks/Figure/data/Using/whole_sample_info.csv"
 
-df.metab <- read.csv(filepath.metab, row.names = 1, check.names = F)
+df.raw_metab <- read.csv(filepath.metab, row.names = 1, check.names = F)
 df.lipid <- read.csv(filepath.lipid, row.names = 1, check.names = F)
 df.sample <- read.csv(filepath.sample, row.names = 1, check.names = F)
 
-df.metab = preprocess_data(df.metab)
+df.raw_metab = wash_data(df.raw_metab)
+df.metab = preprocess_data(df.raw_metab)
 df.lipid = preprocess_data(df.lipid)
 df.sample = preprocess_sample(df.sample)
 
 metab_num = ncol(df.metab)
 
 class_label = "metab_cluster"
+
 ###### Figure 1: Metabolite-Based Subtypes ######
 ##### Figure 1a: Consensus Matrix #####
 metab_data <- data.matrix(df.metab)
@@ -83,12 +89,23 @@ row.names(df.use)=df.use[[1]]
 df.use=df.use[,2:ncol(df.use)]
 df.use = df.use[!is.na(df.use[,class_label]),]
 selected_metabs <- filter_by_wilcox(df.use, colnames(df.metab), class_label , 0.05)
+
+df.use = df.use[!is.na(df.use[,class_label]),]
 metab_heatmap <- draw_heatmap(df.use[,c(selected_metabs,class_label)], 
                              feature_cols = selected_metabs,class_label = class_label,
                              ha_col = class_label, use_row_ha = FALSE, col_split = TRUE)
 
 ##### Figure 1d: Volcano Plot #####
+
+df.use = merge(df.raw_metab,df.sample[,class_label,drop=FALSE],by="row.names")
+row.names(df.use) = df.use[[1]]
+df.use = df.use[,2:ncol(df.use)]
+
 de_results <- pvalue_by_wilcox(df.use, ncol(df.metab), class_label)
+de_results$FC = apply(df.use[, colnames(df.metab)], 2, function(x) {
+            log2(mean(x[df[[class_label]] == '2']) / 
+           mean(x[df[[class_label]] == '1']))
+  })
 volcano_plot <- draw_volcano(de_results, 0.05, 1.5)
 
 ##### Figure 1e: KEGG Pathways #####

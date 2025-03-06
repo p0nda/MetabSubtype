@@ -462,7 +462,7 @@ length(gene_list)
 
 metab.kk2=as.data.frame(kk2)
 metab.kk2=metab.kk2[order(-abs(metab.kk2$enrichmentScore)),]
-gseaplot(kk2, by = "runningScore", title = kk2$Description[1], geneSetID = 1)
+gseaplot(kk2, by = "preranked", title = kk2$Description[1], geneSetID = 1)
 head(kk2)
 
 description_name="Regulation of lipolysis in adipocytes"
@@ -481,7 +481,7 @@ for (description_name in wanted_pathways){
 
 ```{r}
 
-using.test_results=lipid.test.results
+using.test_results = lipid.test.results
 using.test_results$fc=2^(using.test_results$log2fc)
 foldchanges=using.test_results[,"fc"]
 names(foldchanges)=using.test_results[,'ENTREZID']
